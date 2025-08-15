@@ -141,8 +141,13 @@ export const AuthProvider = ({ children }) => {
       const dailyProgressKey = `dailyProgress_${today}`;
       const todayProgress = localStorage.getItem(dailyProgressKey);
 
+      // Filter out undefined values to prevent Firebase errors
+      const cleanUserData = Object.fromEntries(
+        Object.entries(userData).filter(([, value]) => value !== undefined)
+      );
+
       const dataToSync = {
-        ...userData,
+        ...cleanUserData,
         lastUpdated: new Date().toISOString(),
       };
 

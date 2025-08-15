@@ -4,6 +4,7 @@ import Profile from "./assets/profile.jpg";
 
 // Import components
 import {
+  ArrowPathIcon,
   BarChart2Icon,
   BookOpenIcon,
   CalendarIcon,
@@ -704,6 +705,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState("home");
   const [roadmap, setRoadmap] = useState(null);
   const [todayTasks, setTodayTasks] = useState([]);
+  const [todayDailyTasks, setTodayDailyTasks] = useState([]);
   const [books, setBooks] = useState(getInitialBooks());
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -756,6 +758,7 @@ export default function App() {
             setRoadmap(backendData.roadmap);
             setTodayTasks(backendData.todayTasks || []);
             setBooks(backendData.books || []);
+            setTodayDailyTasks(backendData.todayDailyTasks || []);
 
             // Load user preferences
             if (backendData.userPreferences) {
@@ -918,9 +921,10 @@ export default function App() {
         todayTasksLastReset = userData?.todayTasksLastReset || getDateString();
 
         await syncUserData({
-          roadmap,
-          todayTasks,
-          books,
+          roadmap: roadmap || null,
+          todayTasks: todayTasks || [],
+          todayDailyTasks: todayDailyTasks || [],
+          books: books || [],
           todayTasksLastReset, // Preserve existing reset date
           dailyProgress: {
             [date]: progress,
@@ -944,6 +948,7 @@ export default function App() {
     isSyncing,
     roadmap,
     todayTasks,
+    todayDailyTasks,
     books,
     syncUserData,
     getUserData,
@@ -987,9 +992,10 @@ export default function App() {
             "💾 Syncing all data to Firebase (preserving reset date)..."
           );
           syncUserData({
-            roadmap,
-            todayTasks,
-            books,
+            roadmap: roadmap || null,
+            todayTasks: todayTasks || [],
+            todayDailyTasks: todayDailyTasks || [],
+            books: books || [],
             todayTasksLastReset, // Preserve existing reset date
             userPreferences: {
               quoteIndex: quoteIndex ? parseInt(quoteIndex, 10) : 0,
@@ -1005,6 +1011,7 @@ export default function App() {
   }, [
     roadmap,
     todayTasks,
+    todayDailyTasks,
     books,
     quoteIndex,
     loading,
@@ -1065,14 +1072,24 @@ export default function App() {
           // Reset daily progress
           saveTodayProgress(0, 0);
 
+          // Reset Today's Daily Tasks progress
+          const resetTodayDailyTasks = todayDailyTasks.map((task) => ({
+            ...task,
+            ...(task.type === "course"
+              ? { progressHours: 0, progressMinutes: 0 }
+              : { progress: 0 }),
+          }));
+
           // Update state first
           setTodayTasks(resetTasks);
+          setTodayDailyTasks(resetTodayDailyTasks);
 
           // Sync to Firebase immediately with all data
           await syncUserData({
-            roadmap,
+            roadmap: roadmap || null,
             todayTasks: resetTasks,
-            books,
+            todayDailyTasks: resetTodayDailyTasks,
+            books: books || [],
             todayTasksLastReset: today,
             userPreferences: {
               quoteIndex: parseInt(
@@ -1114,6 +1131,7 @@ export default function App() {
     roadmap,
     books,
     todayTasks,
+    todayDailyTasks,
   ]);
 
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
@@ -1122,13 +1140,17 @@ export default function App() {
   const forceSyncToFirebase = async (
     updatedRoadmap = roadmap,
     updatedTodayTasks = todayTasks,
-    updatedBooks = books
+    updatedBooks = books,
+    updatedTodayDailyTasks = todayDailyTasks
   ) => {
     try {
       // Always save to localStorage first as backup
-      localStorage.setItem("roadmap", JSON.stringify(updatedRoadmap));
-      localStorage.setItem("todayTasks", JSON.stringify(updatedTodayTasks));
-      saveBooksToStorage(updatedBooks);
+      localStorage.setItem("roadmap", JSON.stringify(updatedRoadmap || null));
+      localStorage.setItem(
+        "todayTasks",
+        JSON.stringify(updatedTodayTasks || [])
+      );
+      saveBooksToStorage(updatedBooks || []);
 
       if (!isAuthenticated) {
         console.log("💾 Saved to localStorage (not authenticated)");
@@ -1151,9 +1173,10 @@ export default function App() {
         "🚀 Force syncing data to Firebase (preserving reset date)..."
       );
       await syncUserData({
-        roadmap: updatedRoadmap,
-        todayTasks: updatedTodayTasks,
-        books: updatedBooks,
+        roadmap: updatedRoadmap || null,
+        todayTasks: updatedTodayTasks || [],
+        todayDailyTasks: updatedTodayDailyTasks || [],
+        books: updatedBooks || [],
         todayTasksLastReset, // Preserve existing reset date
         userPreferences: {
           quoteIndex: quoteIndex ? parseInt(quoteIndex, 10) : 0,
@@ -1385,6 +1408,29 @@ export default function App() {
       const dailyMinutes = totalMinutes / 7;
       const dailyTaskText = `${name} - ${formatDailyMinutes(dailyMinutes)}`;
       handleAddTodayTask(dailyTaskText, true);
+
+      // Also add to Today's section as a course task with daily portion (1/7th of weekly total)
+      const dailyHours = Math.floor(dailyMinutes / 60);
+      const remainingDailyMinutes = Math.round(dailyMinutes % 60);
+
+      const newTodayTask = {
+        id: `today-${Date.now()}`,
+        name: `${name} (Daily)`,
+        type: "course",
+        totalHours: dailyHours,
+        totalMinutes: remainingDailyMinutes,
+        progressHours: 0,
+        progressMinutes: 0,
+      };
+
+      const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
+      setTodayDailyTasks(updatedTodayTasks);
+
+      if (isAuthenticated) {
+        syncUserData({
+          todayDailyTasks: updatedTodayTasks,
+        });
+      }
     }
     setRoadmap(newRoadmap);
     setNewWeeklyTaskModal({ isOpen: false, weekNumber: null });
@@ -1582,253 +1628,353 @@ export default function App() {
     setNewWeeklyTaskModal({ isOpen: true, weekNumber });
   };
 
-  // --- Current Books Section State ---
-  const [addBookModalOpen, setAddBookModalOpen] = useState(false);
-  const [addPagesModalOpen, setAddPagesModalOpen] = useState(false);
-  const [editingBook, setEditingBook] = useState(null);
+  // --- Today Section State ---
+  const [addTodayTaskModalOpen, setAddTodayTaskModalOpen] = useState(false);
+  const [editingTodayTask, setEditingTodayTask] = useState(null);
+  const [addTodayProgressModalOpen, setAddTodayProgressModalOpen] =
+    useState(false);
 
-  const handleOpenAddBookModal = () => {
-    setEditingBook(null);
-    setAddBookModalOpen(true);
-  };
-
-  const handleOpenEditBookModal = (book) => {
-    setEditingBook(book);
-    setAddBookModalOpen(true);
-  };
-
-  const handleSaveBook = (bookData) => {
-    if (editingBook) {
-      // Update existing book
-      setBooks((prev) =>
-        prev.map((b) =>
-          b.id === editingBook.id
-            ? { ...b, name: bookData.name, totalPages: bookData.totalPages }
-            : b
-        )
+  // --- Today Section Handlers ---
+  const handleSaveTodayTaskFromModal = (taskData) => {
+    if (editingTodayTask) {
+      // Update existing task
+      const updatedTasks = todayDailyTasks.map((task) =>
+        task.id === editingTodayTask.id ? { ...task, ...taskData } : task
       );
+      setTodayDailyTasks(updatedTasks);
+
+      if (isAuthenticated) {
+        syncUserData({ todayDailyTasks: updatedTasks });
+      }
     } else {
-      // Add new book
-      setBooks((prev) => [
-        ...prev,
-        {
-          id: `book-${Date.now()}`,
-          name: bookData.name,
-          totalPages: bookData.totalPages,
-          pagesRead: 0,
-        },
-      ]);
-    }
-    setAddBookModalOpen(false);
-  };
+      // Add new task
+      const newTask = {
+        id: `today-${Date.now()}`,
+        ...taskData,
+        ...(taskData.type === "course"
+          ? { progressHours: 0, progressMinutes: 0 }
+          : { progress: 0 }),
+      };
+      const updatedTasks = [...todayDailyTasks, newTask];
+      setTodayDailyTasks(updatedTasks);
 
-  // --- Add Pages Modal Logic ---
-  const [pagesToAdd, setPagesToAdd] = useState("");
-  const [bookToUpdate, setBookToUpdate] = useState("");
-
-  const openAddPagesModal = (bookId) => {
-    setBookToUpdate(bookId);
-    setPagesToAdd("");
-    setAddPagesModalOpen(true);
-  };
-
-  const handleAddPages = (e) => {
-    e.preventDefault();
-    console.log(
-      "📖 handleAddPages called with pagesToAdd:",
-      pagesToAdd,
-      "bookToUpdate:",
-      bookToUpdate
-    );
-
-    // Block syncing while user is adding data
-    isUserAddingDataRef.current = true;
-
-    if (!bookToUpdate) {
-      isUserAddingDataRef.current = false;
-      return;
-    }
-    const pages = Number(pagesToAdd);
-    if (!pages || isNaN(pages) || pages <= 0) {
-      console.log("❌ Invalid pages input:", pages);
-      isUserAddingDataRef.current = false;
-      return;
+      if (isAuthenticated) {
+        syncUserData({ todayDailyTasks: updatedTasks });
+      }
     }
 
-    console.log("📊 Adding pages to today progress:", pages);
-    // Add to today's progress
-    addToTodayProgress("pages", pages);
-
-    const updatedBooks = books.map((b) =>
-      b.id === bookToUpdate
-        ? { ...b, pagesRead: Math.min(b.pagesRead + pages, b.totalPages) }
-        : b
-    );
-
-    setBooks(updatedBooks);
-    setAddPagesModalOpen(false);
-    setPagesToAdd("");
-    setBookToUpdate("");
-
-    // Allow syncing after a shorter delay and force sync with updated books
-    setTimeout(async () => {
-      isUserAddingDataRef.current = false;
-      await forceSyncToFirebase(roadmap, todayTasks, updatedBooks);
-    }, 300);
+    setAddTodayTaskModalOpen(false);
+    setEditingTodayTask(null);
   };
 
-  // --- Delete Book Logic ---
-  const handleDeleteBook = (bookId) => {
-    setBooks((prev) => prev.filter((b) => b.id !== bookId));
+  const handleAddTodayProgressFromModal = (progressData) => {
+    if (progressData.hours !== undefined) {
+      // Handle time-based progress
+      const updatedTasks = todayDailyTasks.map((task) => {
+        if (task.id === progressData.taskId) {
+          const newProgressMinutes =
+            (task.progressMinutes || 0) + progressData.minutes;
+          const newProgressHours =
+            (task.progressHours || 0) +
+            progressData.hours +
+            Math.floor(newProgressMinutes / 60);
+          const finalProgressMinutes = newProgressMinutes % 60;
+
+          // Cap progress at total
+          const totalMinutesTotal =
+            (task.totalHours || 0) * 60 + (task.totalMinutes || 0);
+          const currentProgressMinutes =
+            newProgressHours * 60 + finalProgressMinutes;
+
+          if (currentProgressMinutes >= totalMinutesTotal) {
+            return {
+              ...task,
+              progressHours: task.totalHours || 0,
+              progressMinutes: task.totalMinutes || 0,
+            };
+          }
+
+          return {
+            ...task,
+            progressHours: newProgressHours,
+            progressMinutes: finalProgressMinutes,
+          };
+        }
+        return task;
+      });
+
+      setTodayDailyTasks(updatedTasks);
+      if (isAuthenticated) {
+        syncUserData({ todayDailyTasks: updatedTasks });
+      }
+    } else {
+      // Handle page-based progress
+      const updatedTasks = todayDailyTasks.map((task) =>
+        task.id === progressData.taskId
+          ? {
+              ...task,
+              progress: Math.min(
+                (task.progress || 0) + progressData.pages,
+                task.total || 0
+              ),
+            }
+          : task
+      );
+
+      setTodayDailyTasks(updatedTasks);
+      if (isAuthenticated) {
+        syncUserData({ todayDailyTasks: updatedTasks });
+      }
+    }
+
+    setAddTodayProgressModalOpen(false);
   };
 
-  // --- Current Books Section UI ---
-  const CurrentBooksSection = () => (
-    <section className="mb-8">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
-        <div className="w-full flex justify-between items-center p-6">
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-            Current Books
-          </h2>
-          <button
-            onClick={handleOpenAddBookModal}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center"
-          >
-            <PlusCircleIcon className="w-5 h-5 mr-2" />
-            <span className="hidden sm:inline">Add Book</span>
-          </button>
-        </div>
-        <div className="px-6 pb-6">
-          {books.length === 0 ? (
-            <div className="text-gray-500 text-center py-6">
-              No books added yet.
+  const handleDeleteTodayDailyTask = (taskId) => {
+    const updatedTasks = todayDailyTasks.filter((task) => task.id !== taskId);
+    setTodayDailyTasks(updatedTasks);
+
+    if (isAuthenticated) {
+      syncUserData({ todayDailyTasks: updatedTasks });
+    }
+  };
+
+  const handleResetTodayDailyTask = (taskId) => {
+    const updatedTasks = todayDailyTasks.map((task) => {
+      if (task.id === taskId) {
+        if (task.type === "course") {
+          return { ...task, progressHours: 0, progressMinutes: 0 };
+        } else {
+          return { ...task, progress: 0 };
+        }
+      }
+      return task;
+    });
+    setTodayDailyTasks(updatedTasks);
+
+    if (isAuthenticated) {
+      syncUserData({ todayDailyTasks: updatedTasks });
+    }
+  };
+
+  // --- Today Section UI ---
+  const TodaySection = () => {
+    // Calculate overall progress for today's tasks
+    const overallProgressCalc = (() => {
+      if (todayDailyTasks.length === 0) return 0;
+      const totalProgress = todayDailyTasks.reduce((sum, task) => {
+        let taskProgress = 0;
+        if (task.type === "course") {
+          const totalMinutes =
+            (task.totalHours || 0) * 60 + (task.totalMinutes || 0);
+          const progressMinutes =
+            (task.progressHours || 0) * 60 + (task.progressMinutes || 0);
+          taskProgress =
+            totalMinutes > 0 ? (progressMinutes / totalMinutes) * 100 : 0;
+        } else {
+          taskProgress =
+            (task.total || 0) > 0
+              ? ((task.progress || 0) / (task.total || 0)) * 100
+              : 0;
+        }
+        return sum + taskProgress;
+      }, 0);
+      return totalProgress / todayDailyTasks.length;
+    })();
+
+    // Helper function to format time display
+    const formatTimeDisplay = (hours, minutes) => {
+      const parts = [];
+      if (hours > 0) parts.push(`${hours}H`);
+      if (minutes > 0) parts.push(`${minutes}M`);
+      return parts.length > 0 ? parts.join(" ") : "0M";
+    };
+
+    return (
+      <>
+        {/* Overall Progress Section */}
+        <section className="mb-8">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-6">
+              <div className="flex-1 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Overall Progress
+                </h2>
+                <span className="text-lg font-mono text-indigo-600 font-semibold ml-4">
+                  {overallProgressCalc.toFixed(2)}%
+                </span>
+              </div>
+              <div className="flex flex-col items-end sm:items-center w-full sm:w-auto">
+                <button
+                  onClick={() => setAddTodayProgressModalOpen(true)}
+                  className="bg-indigo-600 text-white font-bold p-2 sm:px-5 sm:py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center self-end sm:self-center"
+                >
+                  <PlusCircleIcon className="w-5 h-5 sm:mr-2" />
+                  <span className="hidden sm:inline">Add Progress</span>
+                </button>
+              </div>
             </div>
-          ) : (
-            <ul className="space-y-4 mt-4">
-              {books.map((book) => {
-                const percent =
-                  book.totalPages > 0
-                    ? (book.pagesRead / book.totalPages) * 100
-                    : 0;
-                let barColor = "bg-red-500";
-                if (percent >= 80) barColor = "bg-green-500";
-                else if (percent >= 60) barColor = "bg-blue-500";
-                else if (percent >= 40) barColor = "bg-yellow-400";
-                else if (percent >= 20) barColor = "bg-orange-500";
-                return (
-                  <li
-                    key={book.id}
-                    className="bg-gray-50 rounded-lg p-4 flex flex-col gap-2 shadow-sm border border-gray-100 group"
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="font-semibold text-gray-800 text-lg">
-                        {book.name}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => openAddPagesModal(book.id)}
-                          className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors flex items-center"
-                        >
-                          <PlusCircleIcon className="w-4 h-4 sm:mr-1" />
-                          <span className="hidden sm:inline">Add Pages</span>
-                        </button>
-                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenEditBookModal(book);
-                            }}
-                            className="p-1 text-gray-500 hover:text-indigo-600"
-                          >
-                            <PencilIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteBook(book.id);
-                            }}
-                            className="p-1 text-gray-500 hover:text-red-600"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                          <div
-                            className={`${barColor} h-3 rounded-full transition-all duration-500 ease-out`}
-                            style={{
-                              width: `${percent > 100 ? 100 : percent}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                      <span className="text-sm font-mono text-indigo-600 font-semibold min-w-[60px] text-right">
-                        {percent.toFixed(2)}%
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {book.pagesRead} of {book.totalPages} pages read
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      <AddEditBookModal
-        isOpen={addBookModalOpen}
-        onClose={() => setAddBookModalOpen(false)}
-        onSave={handleSaveBook}
-        editingBook={editingBook}
-      />
-
-      {/* Add Pages Modal */}
-      <Modal
-        isOpen={addPagesModalOpen}
-        onClose={() => setAddPagesModalOpen(false)}
-        title={`Add Pages for ${
-          books.find((b) => b.id === bookToUpdate)?.name
-        }`}
-      >
-        <form onSubmit={handleAddPages} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Pages Read
-            </label>
-            <input
-              type="number"
-              value={pagesToAdd}
-              onChange={(e) => setPagesToAdd(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-              min="1"
-              required
-              autoFocus
-            />
+            <div className="px-6 pb-6">
+              <ProgressBar percentage={overallProgressCalc} />
+            </div>
           </div>
-          <div className="flex justify-end gap-2 mt-6">
-            <button
-              type="button"
-              onClick={() => setAddPagesModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-            >
-              Add
-            </button>
+        </section>
+
+        {/* Today Tasks Section */}
+        <section className="mb-8">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
+            <div className="w-full flex justify-between items-center p-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                Today
+              </h2>
+              <button
+                onClick={() => {
+                  setEditingTodayTask(null);
+                  setAddTodayTaskModalOpen(true);
+                }}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center"
+              >
+                <PlusCircleIcon className="w-5 h-5 mr-2" />
+                <span className="hidden sm:inline">Add Task</span>
+              </button>
+            </div>
+            <div className="px-6 pb-6">
+              {todayDailyTasks.length === 0 ? (
+                <div className="text-gray-500 text-center py-6">
+                  No daily tasks added yet.
+                </div>
+              ) : (
+                <ul className="space-y-4 mt-4">
+                  {todayDailyTasks.map((task) => {
+                    let percent = 0;
+                    let progressDisplay = "";
+                    let totalDisplay = "";
+
+                    if (task.type === "course") {
+                      const totalMinutes =
+                        (task.totalHours || 0) * 60 + (task.totalMinutes || 0);
+                      const progressMinutes =
+                        (task.progressHours || 0) * 60 +
+                        (task.progressMinutes || 0);
+                      percent =
+                        totalMinutes > 0
+                          ? (progressMinutes / totalMinutes) * 100
+                          : 0;
+
+                      progressDisplay = formatTimeDisplay(
+                        task.progressHours || 0,
+                        task.progressMinutes || 0
+                      );
+                      totalDisplay = formatTimeDisplay(
+                        task.totalHours || 0,
+                        task.totalMinutes || 0
+                      );
+                    } else {
+                      percent =
+                        (task.total || 0) > 0
+                          ? ((task.progress || 0) / (task.total || 0)) * 100
+                          : 0;
+                      progressDisplay = `${task.progress || 0}`;
+                      totalDisplay = `${task.total || 0}`;
+                    }
+
+                    let barColor = "bg-red-500";
+                    if (percent >= 80) barColor = "bg-green-500";
+                    else if (percent >= 60) barColor = "bg-blue-500";
+                    else if (percent >= 40) barColor = "bg-yellow-400";
+                    else if (percent >= 20) barColor = "bg-orange-500";
+
+                    return (
+                      <li
+                        key={task.id}
+                        className="bg-gray-50 rounded-lg p-4 flex flex-col gap-2 shadow-sm border border-gray-100 group"
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="font-semibold text-gray-800 text-lg">
+                            {task.name}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingTodayTask(task);
+                                  setAddTodayTaskModalOpen(true);
+                                }}
+                                className="p-1 text-gray-500 hover:text-indigo-600"
+                                title="Edit task"
+                              >
+                                <PencilIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleResetTodayDailyTask(task.id);
+                                }}
+                                className="p-1 text-gray-500 hover:text-orange-600"
+                                title="Reset progress to 0"
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTodayDailyTask(task.id);
+                                }}
+                                className="p-1 text-gray-500 hover:text-red-600"
+                                title="Delete task"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                              <div
+                                className={`${barColor} h-3 rounded-full transition-all duration-500 ease-out`}
+                                style={{
+                                  width: `${percent > 100 ? 100 : percent}%`,
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                          <span className="text-sm font-mono text-indigo-600 font-semibold min-w-[60px] text-right">
+                            {percent.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {task.type === "course"
+                            ? `${progressDisplay} of ${totalDisplay} completed`
+                            : `${progressDisplay} of ${totalDisplay} pages completed`}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
-        </form>
-      </Modal>
-    </section>
-  );
+
+          {/* Use external modal components */}
+          <AddTodayTaskModal
+            isOpen={addTodayTaskModalOpen}
+            onClose={() => setAddTodayTaskModalOpen(false)}
+            onSave={handleSaveTodayTaskFromModal}
+            editingTask={editingTodayTask}
+          />
+
+          <AddTodayProgressModal
+            isOpen={addTodayProgressModalOpen}
+            onClose={() => setAddTodayProgressModalOpen(false)}
+            onSave={handleAddTodayProgressFromModal}
+            tasks={todayDailyTasks}
+          />
+        </section>
+      </>
+    );
+  };
 
   if (loading) {
     return (
@@ -1935,7 +2081,7 @@ export default function App() {
               />
             </>
           )}
-          {activeSection === "books" && <CurrentBooksSection />}
+          {activeSection === "books" && <TodaySection />}
           {activeSection === "progress" && roadmap && (
             <div className="bg-white rounded-2xl p-6 mb-8 shadow-lg border border-gray-100">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
@@ -2562,7 +2708,7 @@ export default function App() {
           >
             {" "}
             <BookOpenIcon className="w-6 h-6 mb-1" />{" "}
-            <span className="text-xs font-medium">Books</span>{" "}
+            <span className="text-xs font-medium">Daily</span>{" "}
           </button>
           <button
             className={`flex flex-col items-center flex-1 py-2 ${
@@ -3610,6 +3756,380 @@ function AddWeeksModal({ isOpen, onClose, onSave }) {
             className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
           >
             Add Plan
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Add Today Task Modal Component
+function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
+  const [name, setName] = useState("");
+  const [type, setType] = useState("course");
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [pages, setPages] = useState("");
+
+  useEffect(() => {
+    if (editingTask) {
+      setName(editingTask.name);
+      setType(editingTask.type);
+      if (editingTask.type === "course") {
+        setHours((editingTask.totalHours || 0).toString());
+        setMinutes((editingTask.totalMinutes || 0).toString());
+        setPages("");
+      } else {
+        setHours("");
+        setMinutes("");
+        setPages((editingTask.total || 0).toString());
+      }
+    } else {
+      setName("");
+      setType("course");
+      setHours("");
+      setMinutes("");
+      setPages("");
+    }
+  }, [editingTask, isOpen]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    let taskData;
+    if (type === "course") {
+      const h = parseInt(hours) || 0;
+      const m = parseInt(minutes) || 0;
+      if (h === 0 && m === 0) return;
+
+      // Convert minutes > 59 to hours and remaining minutes
+      const totalMinutes = h * 60 + m;
+      const finalHours = Math.floor(totalMinutes / 60);
+      const finalMinutes = totalMinutes % 60;
+
+      taskData = {
+        name: name.trim(),
+        type: type,
+        totalHours: finalHours,
+        totalMinutes: finalMinutes,
+      };
+    } else {
+      const p = parseInt(pages) || 0;
+      if (p <= 0) return;
+
+      taskData = {
+        name: name.trim(),
+        type: type,
+        total: p,
+      };
+    }
+
+    if (name.trim()) {
+      onSave(taskData);
+      setName("");
+      setType("course");
+      setHours("");
+      setMinutes("");
+      setPages("");
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editingTask ? "Edit Task" : "Add Today Task"}
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="space-y-4">
+          <div>
+            <label
+              htmlFor="today-task-name"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Task Name
+            </label>
+            <input
+              type="text"
+              id="today-task-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Learn React"
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+              autoFocus
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Type
+            </label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+            >
+              <option value="book">Book (Pages)</option>
+              <option value="course">Course (Time)</option>
+            </select>
+          </div>
+          {type === "course" ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Time
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    placeholder="Hours"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                    min="0"
+                  />
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={minutes}
+                    onChange={(e) => setMinutes(e.target.value)}
+                    placeholder="Minutes"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                    min="0"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Pages
+              </label>
+              <input
+                type="number"
+                value={pages}
+                onChange={(e) => setPages(e.target.value)}
+                placeholder="Number of pages"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                min="1"
+              />
+            </div>
+          )}
+        </div>
+        <div className="mt-6 flex justify-end space-x-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+          >
+            {editingTask ? "Update" : "Add"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Add Today Progress Modal Component
+function AddTodayProgressModal({ isOpen, onClose, onSave, tasks }) {
+  const [mode, setMode] = useState("time"); // 'time' or 'book'
+  const [selectedTaskId, setSelectedTaskId] = useState("");
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [pages, setPages] = useState("");
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedTaskId("");
+      setHours("");
+      setMinutes("");
+      setPages("");
+    }
+  }, [isOpen]);
+
+  // Filter tasks by type based on mode
+  const availableTimeTasks = tasks.filter((task) => task.type === "course");
+  const availableBookTasks = tasks.filter((task) => task.type === "book");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!selectedTaskId) return;
+
+    let progressData;
+    if (mode === "time") {
+      const h = parseInt(hours) || 0;
+      const m = parseInt(minutes) || 0;
+      if (h === 0 && m === 0) return;
+
+      // Convert minutes > 59 to hours and remaining minutes
+      const totalMinutes = h * 60 + m;
+      const finalHours = Math.floor(totalMinutes / 60);
+      const finalMinutes = totalMinutes % 60;
+
+      progressData = {
+        taskId: selectedTaskId,
+        hours: finalHours,
+        minutes: finalMinutes,
+      };
+    } else {
+      const p = parseInt(pages) || 0;
+      if (p <= 0) return;
+
+      progressData = {
+        taskId: selectedTaskId,
+        pages: p,
+      };
+    }
+
+    onSave(progressData);
+    setSelectedTaskId("");
+    setHours("");
+    setMinutes("");
+    setPages("");
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Progress">
+      {/* Tab buttons */}
+      <div className="flex border-b border-gray-200 mb-4">
+        <button
+          onClick={() => {
+            setMode("time");
+            setSelectedTaskId("");
+          }}
+          className={`px-4 py-2 text-sm font-medium ${
+            mode === "time"
+              ? "border-b-2 border-indigo-500 text-indigo-600"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Add Time
+        </button>
+        <button
+          onClick={() => {
+            setMode("book");
+            setSelectedTaskId("");
+          }}
+          className={`px-4 py-2 text-sm font-medium ${
+            mode === "book"
+              ? "border-b-2 border-indigo-500 text-indigo-600"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Add Book
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        {mode === "time" ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Select Course Task
+              </label>
+              <select
+                value={selectedTaskId}
+                onChange={(e) => setSelectedTaskId(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                required
+              >
+                <option value="">Choose a course task</option>
+                {availableTimeTasks.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedTaskId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Time Progress
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      value={hours}
+                      onChange={(e) => setHours(e.target.value)}
+                      placeholder="Hours"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                      min="0"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      value={minutes}
+                      onChange={(e) => setMinutes(e.target.value)}
+                      placeholder="Minutes"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                      min="0"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Select Book Task
+              </label>
+              <select
+                value={selectedTaskId}
+                onChange={(e) => setSelectedTaskId(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                required
+              >
+                <option value="">Choose a book task</option>
+                {availableBookTasks.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedTaskId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Pages Read
+                </label>
+                <input
+                  type="number"
+                  value={pages}
+                  onChange={(e) => setPages(e.target.value)}
+                  placeholder="Number of pages"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                  min="1"
+                  autoFocus
+                />
+              </div>
+            )}
+          </div>
+        )}
+        <div className="mt-6 flex justify-end space-x-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+          >
+            Add
           </button>
         </div>
       </form>

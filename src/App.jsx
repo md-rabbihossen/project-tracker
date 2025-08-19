@@ -20,10 +20,18 @@ import {
 
 import { LoginModal } from "./components/auth/LoginModal";
 import { RegisterModal } from "./components/auth/RegisterModal";
+import { ProgressCharts } from "./components/charts/ProgressCharts";
+import { MobileFilter } from "./components/common/MobileFilter";
 import { Modal } from "./components/common/Modal";
 import { ProgressBar } from "./components/common/ProgressBar";
 import { AddTaskForm } from "./components/forms/AddTaskForm";
+import { AddGoalModal, GoalCard } from "./components/goals/GoalComponents";
+import { CustomToaster } from "./components/notifications/ToastNotifications";
 import { CountdownTimer } from "./components/sections/CountdownTimer";
+import { PomodoroTimer } from "./components/timer/PomodoroTimer";
+
+// Lucide React icons
+import { Clock, Plus, X } from "lucide-react";
 
 // Import utilities
 import {
@@ -43,6 +51,8 @@ import {
   shouldShowTaskToday,
 } from "./utils/helpers";
 
+import { TASK_CATEGORIES } from "./utils/taskCategories";
+
 // Import auth context
 import { useAuth } from "./contexts/AuthContext";
 
@@ -52,18 +62,53 @@ const TodayTasksSection = ({
   onToggleTask,
   onDeleteTask,
   onEditTask,
+  selectedCategory,
+  onCategoryChange,
+  filterType,
+  onFilterChange,
+  sortType,
+  onSortChange,
 }) => {
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editingTaskText, setEditingTaskText] = useState("");
 
-  // Filter tasks that should be shown today and sort by priority
+  // Filter tasks that should be shown today and apply category/filter/sort
   const todayTasks = tasks
     .filter((task) => shouldShowTaskToday(task))
+    .filter((task) => {
+      // Category filter
+      if (selectedCategory !== "all" && task.category !== selectedCategory) {
+        return false;
+      }
+
+      // Status filter
+      if (filterType === "completed" && !task.completed) {
+        return false;
+      }
+      if (filterType === "pending" && task.completed) {
+        return false;
+      }
+      if (filterType === "high-priority" && task.priority !== "high") {
+        return false;
+      }
+
+      return true;
+    })
     .sort((a, b) => {
-      // High priority tasks come first
-      if (a.priority === "high" && b.priority !== "high") return -1;
-      if (b.priority === "high" && a.priority !== "high") return 1;
-      return 0;
+      // Sort by selected sort type
+      switch (sortType) {
+        case "priority":
+          // High priority tasks come first
+          if (a.priority === "high" && b.priority !== "high") return -1;
+          if (b.priority === "high" && a.priority !== "high") return 1;
+          return 0;
+        case "name":
+          return a.text.localeCompare(b.text);
+        case "created":
+          return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        default:
+          return 0;
+      }
     });
 
   const visibleTasks = todayTasks.filter((task) => !task.completed);
@@ -71,6 +116,18 @@ const TodayTasksSection = ({
   const totalTasks = todayTasks.length;
   const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
   const remainingTasks = visibleTasks.length;
+
+  // Calculate task counts by category for the filter
+  const taskCounts = tasks
+    .filter((task) => shouldShowTaskToday(task))
+    .reduce((acc, task) => {
+      const category = task.category || "personal";
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {});
+
+  // Add 'all' category count
+  taskCounts.all = tasks.filter((task) => shouldShowTaskToday(task)).length;
 
   const handleStartEdit = (task) => {
     setEditingTaskId(task.id);
@@ -141,12 +198,24 @@ const TodayTasksSection = ({
             <CountdownTimer />
           </div>
         </div>
+
+        {/* Mobile Filter (replaces Categories and Search) */}
+        <MobileFilter
+          selectedCategory={selectedCategory}
+          onCategoryChange={onCategoryChange}
+          filterType={filterType}
+          onFilterChange={onFilterChange}
+          sortType={sortType}
+          onSortChange={onSortChange}
+          taskCounts={taskCounts}
+        />
+
         <ProgressBar percentage={progress} />
         <ul className="mt-6 space-y-3">
           {visibleTasks.map((task) => (
             <li
               key={task.id}
-              className={`flex items-center group rounded-lg p-3 transition-all ${
+              className={`flex items-start sm:items-center group rounded-lg p-3 transition-all ${
                 task.priority === "high"
                   ? "bg-red-50 border border-red-200"
                   : "hover:bg-gray-50"
@@ -157,71 +226,85 @@ const TodayTasksSection = ({
                 id={task.id}
                 checked={task.completed}
                 onChange={() => onToggleTask(task.id)}
-                className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                className="w-5 h-5 mt-0.5 sm:mt-0 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer flex-shrink-0"
               />
-              <div className="ml-3 flex-grow flex items-center">
+              <div className="ml-3 flex-grow min-w-0">
                 {editingTaskId === task.id ? (
-                  <div className="w-full flex items-center gap-2">
+                  <div className="w-full">
                     <input
                       type="text"
                       value={editingTaskText}
                       onChange={(e) => setEditingTaskText(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
-                      className="flex-grow text-base border-b-2 border-indigo-200 focus:border-indigo-500 outline-none"
+                      className="w-full text-base border-b-2 border-indigo-200 focus:border-indigo-500 outline-none mb-2"
                       autoFocus
                     />
-                    <button
-                      onClick={handleSaveEdit}
-                      className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={handleCancelEdit}
-                      className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-                    >
-                      Cancel
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveEdit}
+                        className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-center w-full">
-                    <label
-                      htmlFor={task.id}
-                      className={`text-gray-700 text-base cursor-pointer transition-colors flex-grow ${
-                        task.completed
-                          ? "line-through text-gray-400"
-                          : "group-hover:text-gray-900"
-                      }`}
-                    >
-                      {task.priority === "high" && (
-                        <span className="text-red-500 mr-2">🔥</span>
-                      )}
-                      {task.text}
-                    </label>
-                    <div className="flex items-center gap-2 ml-2">
+                  <div className="w-full">
+                    <div className="flex items-start sm:items-center justify-between">
+                      <label
+                        htmlFor={task.id}
+                        className={`text-gray-700 text-base cursor-pointer transition-colors flex-grow min-w-0 pr-2 ${
+                          task.completed
+                            ? "line-through text-gray-400"
+                            : "group-hover:text-gray-900"
+                        }`}
+                      >
+                        {task.priority === "high" && (
+                          <span className="text-red-500 mr-2">🔥</span>
+                        )}
+                        <span className="break-words">{task.text}</span>
+                      </label>
+                      {/* Action buttons - always visible on mobile, on hover for desktop */}
+                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button
+                          onClick={() => handleStartEdit(task)}
+                          className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Edit task"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteTask(task.id)}
+                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete task"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    {/* Badges row */}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                       {task.priority === "high" && (
                         <span className="text-xs font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
                           High Priority
                         </span>
                       )}
                       {getRepeatBadge(task)}
+                      {task.category && task.category !== "personal" && (
+                        <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+                          {TASK_CATEGORIES.find((c) => c.id === task.category)
+                            ?.name || task.category}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
-              </div>
-              <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                <button
-                  onClick={() => handleStartEdit(task)}
-                  className="p-1 text-gray-500 hover:text-indigo-600"
-                >
-                  <PencilIcon className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onDeleteTask(task.id)}
-                  className="p-1 text-gray-500 hover:text-red-600"
-                >
-                  <TrashIcon className="w-4 h-4" />
-                </button>
               </div>
             </li>
           ))}
@@ -724,6 +807,21 @@ export default function App() {
     const saved = localStorage.getItem("quoteIndex");
     return saved ? parseInt(saved, 10) : 0;
   });
+
+  // Enhanced features state
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [filterType, setFilterType] = useState("all");
+  const [sortType, setSortType] = useState("priority");
+  const [goals, setGoals] = useState(() => {
+    try {
+      const saved = localStorage.getItem("userGoals");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [addGoalModalOpen, setAddGoalModalOpen] = useState(false);
+  const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
 
   useEffect(() => {
     setQuoteIndex((prev) => {
@@ -1467,23 +1565,23 @@ export default function App() {
     setRoadmap(newRoadmap);
   };
 
-  const handleAddTodayTask = (
-    taskText,
-    isDaily,
-    priority = "normal",
-    repeatType = "none",
-    selectedDays = []
-  ) => {
+  const handleAddTodayTask = (taskData) => {
     const today = new Date().getDay();
     const newTask = {
-      text: taskText,
+      text: taskData.text || taskData, // Support both old string format and new object format
       completed: false,
       id: `today-${Date.now()}`,
-      isDaily,
-      priority,
-      repeatType,
-      selectedDays: repeatType === "weekly" ? [today] : selectedDays, // For weekly, store the day it was created
-      createdAt: new Date().toISOString(),
+      isDaily:
+        taskData.isDaily ||
+        (typeof taskData === "string" ? false : taskData.isDaily),
+      priority: taskData.priority || "normal",
+      repeatType: taskData.repeatType || "none",
+      selectedDays:
+        taskData.repeatType === "weekly"
+          ? [today]
+          : taskData.selectedDays || [],
+      category: taskData.category || "personal",
+      createdAt: taskData.createdAt || new Date().toISOString(),
     };
 
     setTodayTasks((prev) => [...prev, newTask]);
@@ -2043,6 +2141,54 @@ export default function App() {
         onSave={handleAddWeeks}
       />
 
+      {/* Floating Pomodoro Timer Button */}
+      <button
+        onClick={() => setShowPomodoroTimer(!showPomodoroTimer)}
+        className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-600 text-white p-4 rounded-full shadow-lg transition-all z-40 flex items-center gap-2"
+        title="Pomodoro Timer"
+      >
+        <Clock size={24} />
+      </button>
+
+      {/* Pomodoro Timer Modal */}
+      {showPomodoroTimer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">
+                Pomodoro Timer
+              </h3>
+              <button
+                onClick={() => setShowPomodoroTimer(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <PomodoroTimer />
+          </div>
+        </div>
+      )}
+
+      {/* Goal Modal */}
+      <AddGoalModal
+        isOpen={addGoalModalOpen}
+        onClose={() => setAddGoalModalOpen(false)}
+        onAdd={(goalData) => {
+          const newGoal = {
+            ...goalData,
+            id: `goal-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            progress: 0,
+          };
+          setGoals((prev) => [...prev, newGoal]);
+          setAddGoalModalOpen(false);
+        }}
+      />
+
+      {/* Toast Notifications */}
+      <CustomToaster />
+
       {/* Main Layout */}
       <div className="min-h-screen bg-gray-50 font-sans pb-20">
         <div className="max-w-3xl mx-auto px-2 sm:px-6 lg:px-8 py-6">
@@ -2078,6 +2224,12 @@ export default function App() {
                 onToggleTask={handleToggleTodayTask}
                 onDeleteTask={handleDeleteTodayTask}
                 onEditTask={handleEditTodayTask}
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+                filterType={filterType}
+                onFilterChange={setFilterType}
+                sortType={sortType}
+                onSortChange={setSortType}
               />
             </>
           )}
@@ -2175,6 +2327,14 @@ export default function App() {
                     Analytics Dashboard
                   </h2>
                 </div>
+
+                {/* Progress Charts */}
+                <ProgressCharts
+                  todayTasks={todayTasks}
+                  roadmap={roadmap}
+                  books={books}
+                  className="mb-8"
+                />
 
                 {/* Today's Progress Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -2570,6 +2730,50 @@ export default function App() {
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Goals Section */}
+              <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    🎯 Goals
+                  </h3>
+                  <button
+                    onClick={() => setAddGoalModalOpen(true)}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Add Goal
+                  </button>
+                </div>
+
+                <div className="grid gap-4">
+                  {goals.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">
+                      No goals set yet. Create your first goal to start tracking
+                      your progress!
+                    </p>
+                  ) : (
+                    goals.map((goal) => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        onUpdate={(updatedGoal) => {
+                          setGoals((prev) =>
+                            prev.map((g) =>
+                              g.id === goal.id ? updatedGoal : g
+                            )
+                          );
+                        }}
+                        onDelete={(goalId) => {
+                          setGoals((prev) =>
+                            prev.filter((g) => g.id !== goalId)
+                          );
+                        }}
+                      />
+                    ))
+                  )}
                 </div>
               </div>
 

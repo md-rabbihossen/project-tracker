@@ -7,13 +7,7 @@ export const AddTaskForm = ({ onAddTask, isTodaySection = false }) => {
 
   const handleAddTask = (taskData) => {
     if (isTodaySection) {
-      onAddTask(
-        taskData.text,
-        taskData.isDaily,
-        taskData.priority,
-        taskData.repeatType,
-        taskData.selectedDays
-      );
+      onAddTask(taskData);
     } else {
       onAddTask(taskData.text, taskData.isDaily);
     }

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { XCircleIcon } from '../Icons';
+import { useEffect, useState } from "react";
+import { TASK_CATEGORIES } from "../../utils/taskCategories";
+import { XCircleIcon } from "../Icons";
 
 export const AddTaskModal = ({ isOpen, onClose, onAddTask }) => {
   const [taskText, setTaskText] = useState("");
@@ -7,6 +8,7 @@ export const AddTaskModal = ({ isOpen, onClose, onAddTask }) => {
   const [priority, setPriority] = useState("normal");
   const [repeatType, setRepeatType] = useState("none");
   const [selectedDays, setSelectedDays] = useState([]);
+  const [category, setCategory] = useState("personal");
 
   const weekDays = [
     { short: "Sun", full: "Sunday" },
@@ -25,6 +27,7 @@ export const AddTaskModal = ({ isOpen, onClose, onAddTask }) => {
       setPriority("normal");
       setRepeatType("none");
       setSelectedDays([]);
+      setCategory("personal");
     }
   }, [isOpen]);
 
@@ -37,6 +40,8 @@ export const AddTaskModal = ({ isOpen, onClose, onAddTask }) => {
         priority,
         repeatType,
         selectedDays: repeatType === "custom" ? selectedDays : [],
+        category,
+        createdAt: new Date().toISOString(),
       };
       onAddTask(taskData);
       onClose();
@@ -81,6 +86,24 @@ export const AddTaskModal = ({ isOpen, onClose, onAddTask }) => {
               autoFocus
               required
             />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Category
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+            >
+              {TASK_CATEGORIES.filter((cat) => cat.id !== "all").map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon} {cat.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Priority */}

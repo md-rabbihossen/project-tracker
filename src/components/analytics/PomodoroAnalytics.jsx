@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Check, Clock, Edit2, Plus, TrendingUp, X } from "lucide-react";
+import { Check, Clock, Edit2, Plus, Target, TrendingUp, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   addLabel,
@@ -18,6 +18,7 @@ import {
   removeLabel,
   updatePomodoroGoals,
 } from "../../utils/pomodoroStats";
+import { AddGoalModal, GoalCard } from "../goals/GoalComponents";
 import { AddTimeModal } from "../timer/AddTimeModal";
 
 export const PomodoroAnalytics = () => {
@@ -54,12 +55,53 @@ export const PomodoroAnalytics = () => {
   ]);
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
 
+  // User Goals state (different from Pomodoro goals)
+  const [userGoals, setUserGoals] = useState([]);
+  const [addGoalModalOpen, setAddGoalModalOpen] = useState(false);
+
+  // User Goals functions
+  const loadUserGoals = () => {
+    const saved = localStorage.getItem("userGoals");
+    if (saved) {
+      setUserGoals(JSON.parse(saved));
+    }
+  };
+
+  const saveUserGoals = (goals) => {
+    localStorage.setItem("userGoals", JSON.stringify(goals));
+    setUserGoals(goals);
+  };
+
+  const addUserGoal = (goal) => {
+    const newGoal = {
+      ...goal,
+      id: `goal-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      current: 0, // Add current progress property
+    };
+    const updatedGoals = [...userGoals, newGoal];
+    saveUserGoals(updatedGoals);
+  };
+
+  const updateUserGoal = (updatedGoal) => {
+    const updatedGoals = userGoals.map((goal) =>
+      goal.id === updatedGoal.id ? updatedGoal : goal
+    );
+    saveUserGoals(updatedGoals);
+  };
+
+  const deleteUserGoal = (goalId) => {
+    const updatedGoals = userGoals.filter((goal) => goal.id !== goalId);
+    saveUserGoals(updatedGoals);
+  };
+
   useEffect(() => {
     // Clean up old stats and load current stats
     cleanupOldStats();
     loadStats();
     loadGoals();
     loadLabels();
+    loadUserGoals();
 
     // Set up interval to refresh stats every minute - temporarily disabled to debug reload issue
     // const interval = setInterval(loadStats, 60000);
@@ -167,6 +209,20 @@ export const PomodoroAnalytics = () => {
     return diffDays;
   };
 
+  const formatRemainingTime = (minutes) => {
+    if (minutes <= 0) return "0 min";
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+
+    if (hours === 0) {
+      return `${mins} min`;
+    } else if (mins === 0) {
+      return `${hours}h`;
+    } else {
+      return `${hours}h ${mins}min`;
+    }
+  };
+
   const StatCard = ({
     title,
     subtitle,
@@ -197,8 +253,12 @@ export const PomodoroAnalytics = () => {
             />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-gray-800 text-sm sm:text-base">{title}</h3>
-            <p className="text-xs sm:text-sm text-gray-600 truncate">{subtitle}</p>
+            <h3 className="font-semibold text-gray-800 text-sm sm:text-base">
+              {title}
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-600 truncate">
+              {subtitle}
+            </p>
           </div>
         </div>
         {trend && (
@@ -228,14 +288,18 @@ export const PomodoroAnalytics = () => {
         {/* Labels breakdown */}
         {Object.keys(labels).length > 0 && (
           <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-100">
-            <p className="text-xs font-medium text-gray-500 mb-1 sm:mb-2">Breakdown:</p>
+            <p className="text-xs font-medium text-gray-500 mb-1 sm:mb-2">
+              Breakdown:
+            </p>
             <div className="space-y-1 max-h-16 sm:max-h-none overflow-y-auto">
               {Object.entries(labels)
                 .sort(([, a], [, b]) => b - a)
                 .slice(0, window.innerWidth < 640 ? 2 : 999) // Show only top 2 on mobile
                 .map(([label, minutes]) => (
                   <div key={label} className="flex justify-between text-xs">
-                    <span className="text-gray-600 capitalize truncate">{label}:</span>
+                    <span className="text-gray-600 capitalize truncate">
+                      {label}:
+                    </span>
                     <span className="font-medium text-gray-800 flex-shrink-0 ml-1">
                       {formatDuration(minutes)}
                     </span>
@@ -323,113 +387,6 @@ export const PomodoroAnalytics = () => {
         />
       </div>
 
-      {/* Quick Insights */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-6 border border-red-100"
-      >
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <TrendingUp size={20} className="text-red-600" />
-          Quick Insights & Previous Periods
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="text-lg sm:text-2xl font-bold text-red-600">
-              {stats.lifetime.totalSessions > 0
-                ? Math.round(
-                    stats.lifetime.totalMinutes / stats.lifetime.totalSessions
-                  )
-                : 0}
-              min
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600">Avg Session</div>
-          </div>
-          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="text-lg sm:text-2xl font-bold text-orange-600">
-              {stats.week.sessions > 0 ? Math.round(stats.week.minutes / 7) : 0}
-              min
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600">Daily Avg</div>
-          </div>
-          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="text-lg sm:text-2xl font-bold text-yellow-600">
-              {stats.today.sessions}
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600">Today's Sessions</div>
-          </div>
-          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="text-lg sm:text-2xl font-bold text-green-600">
-              {Math.round((stats.lifetime.totalMinutes / 60) * 10) / 10}h
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600">Total Hours</div>
-          </div>
-        </div>
-
-        {/* Previous Periods Comparison */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-3 sm:pt-4 border-t border-red-200">
-          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
-            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">Previous Day</h4>
-            <div className="text-base sm:text-lg font-bold text-blue-600">
-              {formatDuration(previousStats.previousDay.minutes)}
-            </div>
-            <p className="text-xs sm:text-sm text-gray-600">
-              {previousStats.previousDay.sessions} sessions
-            </p>
-            {Object.keys(previousStats.previousDay.labels || {}).length > 0 && (
-              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
-                {Object.entries(previousStats.previousDay.labels)
-                  .slice(0, 2) // Show only top 2 on mobile
-                  .map(
-                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
-                  )
-                  .join(", ")}
-              </div>
-            )}
-          </div>
-          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
-            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">Previous Week</h4>
-            <div className="text-base sm:text-lg font-bold text-green-600">
-              {formatDuration(previousStats.previousWeek.minutes)}
-            </div>
-            <p className="text-xs sm:text-sm text-gray-600">
-              {previousStats.previousWeek.sessions} sessions
-            </p>
-            {Object.keys(previousStats.previousWeek.labels || {}).length >
-              0 && (
-              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
-                {Object.entries(previousStats.previousWeek.labels)
-                  .slice(0, 2) // Show only top 2 on mobile
-                  .map(
-                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
-                  )
-                  .join(", ")}
-              </div>
-            )}
-          </div>
-          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
-            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">Previous Month</h4>
-            <div className="text-base sm:text-lg font-bold text-purple-600">
-              {formatDuration(previousStats.previousMonth.minutes)}
-            </div>
-            <p className="text-xs sm:text-sm text-gray-600">
-              {previousStats.previousMonth.sessions} sessions
-            </p>
-            {Object.keys(previousStats.previousMonth.labels || {}).length >
-              0 && (
-              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
-                {Object.entries(previousStats.previousMonth.labels)
-                  .slice(0, 2) // Show only top 2 on mobile
-                  .map(
-                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
-                  )
-                  .join(", ")}
-              </div>
-            )}
-          </div>
-        </div>
-      </motion.div>
-
       {/* Progress Bars with Editable Goals */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -475,7 +432,9 @@ export const PomodoroAnalytics = () => {
           <div>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0 mb-2">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                <span className="text-xs sm:text-sm text-gray-600">Daily Target:</span>
+                <span className="text-xs sm:text-sm text-gray-600">
+                  Daily Target:
+                </span>
                 {editingGoals ? (
                   <div className="flex items-center gap-2">
                     <input
@@ -523,7 +482,9 @@ export const PomodoroAnalytics = () => {
                 complete
               </span>
               <span>
-                {Math.max(0, goals.dailyMinutes - stats.today.minutes)} min
+                {formatRemainingTime(
+                  Math.max(0, goals.dailyMinutes - stats.today.minutes)
+                )}{" "}
                 remaining
               </span>
             </div>
@@ -533,7 +494,9 @@ export const PomodoroAnalytics = () => {
           <div>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0 mb-2">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                <span className="text-xs sm:text-sm text-gray-600">Weekly Target:</span>
+                <span className="text-xs sm:text-sm text-gray-600">
+                  Weekly Target:
+                </span>
                 {editingGoals ? (
                   <div className="flex items-center gap-2">
                     <input
@@ -581,7 +544,9 @@ export const PomodoroAnalytics = () => {
                 complete
               </span>
               <span>
-                {Math.max(0, goals.weeklyMinutes - stats.week.minutes)} min
+                {formatRemainingTime(
+                  Math.max(0, goals.weeklyMinutes - stats.week.minutes)
+                )}{" "}
                 remaining
               </span>
             </div>
@@ -591,7 +556,9 @@ export const PomodoroAnalytics = () => {
           <div>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0 mb-2">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                <span className="text-xs sm:text-sm text-gray-600">Monthly Target:</span>
+                <span className="text-xs sm:text-sm text-gray-600">
+                  Monthly Target:
+                </span>
                 {editingGoals ? (
                   <div className="flex items-center gap-2">
                     <input
@@ -639,10 +606,174 @@ export const PomodoroAnalytics = () => {
                 % complete
               </span>
               <span>
-                {Math.max(0, goals.monthlyMinutes - stats.month.minutes)} min
+                {formatRemainingTime(
+                  Math.max(0, goals.monthlyMinutes - stats.month.minutes)
+                )}{" "}
                 remaining
               </span>
             </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* User Goals Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg border border-gray-100"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4">
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+            <Target size={20} className="text-blue-600" />
+            Personal Goals
+          </h3>
+          <button
+            onClick={() => setAddGoalModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+          >
+            <Plus size={14} />
+            Add Goal
+          </button>
+        </div>
+
+        {userGoals.length === 0 ? (
+          <div className="text-center py-8">
+            <Target size={48} className="mx-auto text-gray-300 mb-3" />
+            <p className="text-gray-500 mb-4">
+              No personal goals yet. Start by adding your first goal!
+            </p>
+            <button
+              onClick={() => setAddGoalModalOpen(true)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Add Your First Goal
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {userGoals.map((goal) => (
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                onUpdate={updateUserGoal}
+                onDelete={deleteUserGoal}
+              />
+            ))}
+          </div>
+        )}
+      </motion.div>
+
+      {/* Quick Insights */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-6 border border-red-100"
+      >
+        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+          <TrendingUp size={20} className="text-red-600" />
+          Quick Insights & Previous Periods
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
+            <div className="text-lg sm:text-2xl font-bold text-red-600">
+              {stats.lifetime.totalSessions > 0
+                ? Math.round(
+                    stats.lifetime.totalMinutes / stats.lifetime.totalSessions
+                  )
+                : 0}
+              min
+            </div>
+            <div className="text-xs sm:text-sm text-gray-600">Avg Session</div>
+          </div>
+          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
+            <div className="text-lg sm:text-2xl font-bold text-orange-600">
+              {stats.week.sessions > 0 ? Math.round(stats.week.minutes / 7) : 0}
+              min
+            </div>
+            <div className="text-xs sm:text-sm text-gray-600">Daily Avg</div>
+          </div>
+          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
+            <div className="text-lg sm:text-2xl font-bold text-yellow-600">
+              {stats.today.sessions}
+            </div>
+            <div className="text-xs sm:text-sm text-gray-600">
+              Today's Sessions
+            </div>
+          </div>
+          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
+            <div className="text-lg sm:text-2xl font-bold text-green-600">
+              {Math.round((stats.lifetime.totalMinutes / 60) * 10) / 10}h
+            </div>
+            <div className="text-xs sm:text-sm text-gray-600">Total Hours</div>
+          </div>
+        </div>
+
+        {/* Previous Periods Comparison */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-3 sm:pt-4 border-t border-red-200">
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
+              Previous Day
+            </h4>
+            <div className="text-base sm:text-lg font-bold text-blue-600">
+              {formatDuration(previousStats.previousDay.minutes)}
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600">
+              {previousStats.previousDay.sessions} sessions
+            </p>
+            {Object.keys(previousStats.previousDay.labels || {}).length > 0 && (
+              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
+                {Object.entries(previousStats.previousDay.labels)
+                  .slice(0, 2) // Show only top 2 on mobile
+                  .map(
+                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
+                  )
+                  .join(", ")}
+              </div>
+            )}
+          </div>
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
+              Previous Week
+            </h4>
+            <div className="text-base sm:text-lg font-bold text-green-600">
+              {formatDuration(previousStats.previousWeek.minutes)}
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600">
+              {previousStats.previousWeek.sessions} sessions
+            </p>
+            {Object.keys(previousStats.previousWeek.labels || {}).length >
+              0 && (
+              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
+                {Object.entries(previousStats.previousWeek.labels)
+                  .slice(0, 2) // Show only top 2 on mobile
+                  .map(
+                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
+                  )
+                  .join(", ")}
+              </div>
+            )}
+          </div>
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
+            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
+              Previous Month
+            </h4>
+            <div className="text-base sm:text-lg font-bold text-purple-600">
+              {formatDuration(previousStats.previousMonth.minutes)}
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600">
+              {previousStats.previousMonth.sessions} sessions
+            </p>
+            {Object.keys(previousStats.previousMonth.labels || {}).length >
+              0 && (
+              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
+                {Object.entries(previousStats.previousMonth.labels)
+                  .slice(0, 2) // Show only top 2 on mobile
+                  .map(
+                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
+                  )
+                  .join(", ")}
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -655,6 +786,13 @@ export const PomodoroAnalytics = () => {
         availableLabels={availableLabels}
         onAddLabel={handleAddLabel}
         onRemoveLabel={handleRemoveLabel}
+      />
+
+      {/* Add Goal Modal */}
+      <AddGoalModal
+        isOpen={addGoalModalOpen}
+        onClose={() => setAddGoalModalOpen(false)}
+        onAdd={addUserGoal}
       />
     </div>
   );

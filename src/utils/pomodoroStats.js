@@ -212,11 +212,14 @@ export const getTodayStats = () => {
 export const getThisWeekStats = () => {
   const stats = getPomodoroStats();
   const thisWeek = getWeekStartDate();
-  const weekStats = stats.weekly[thisWeek] || {
-    minutes: 0,
-    sessions: 0,
-    labels: {},
-  };
+
+  // Ensure this week's stats exist
+  if (!stats.weekly[thisWeek]) {
+    stats.weekly[thisWeek] = { minutes: 0, sessions: 0, labels: {} };
+    savePomodoroStats(stats);
+  }
+
+  const weekStats = stats.weekly[thisWeek];
 
   // Ensure labels object exists (backward compatibility)
   if (!weekStats.labels) {
@@ -230,11 +233,14 @@ export const getThisWeekStats = () => {
 export const getThisMonthStats = () => {
   const stats = getPomodoroStats();
   const thisMonth = getCurrentMonth();
-  const monthStats = stats.monthly[thisMonth] || {
-    minutes: 0,
-    sessions: 0,
-    labels: {},
-  };
+
+  // Ensure this month's stats exist
+  if (!stats.monthly[thisMonth]) {
+    stats.monthly[thisMonth] = { minutes: 0, sessions: 0, labels: {} };
+    savePomodoroStats(stats);
+  }
+
+  const monthStats = stats.monthly[thisMonth];
 
   // Ensure labels object exists (backward compatibility)
   if (!monthStats.labels) {
@@ -431,7 +437,21 @@ export const cleanupOldStats = () => {
     }
   });
 
-  // Only save if we actually cleaned up something
+  // Ensure current periods are initialized
+  const currentWeekKey = getWeekStartDate();
+  const currentMonthKey = getCurrentMonth();
+
+  if (!stats.weekly[currentWeekKey]) {
+    stats.weekly[currentWeekKey] = { minutes: 0, sessions: 0, labels: {} };
+    hasChanges = true;
+  }
+
+  if (!stats.monthly[currentMonthKey]) {
+    stats.monthly[currentMonthKey] = { minutes: 0, sessions: 0, labels: {} };
+    hasChanges = true;
+  }
+
+  // Only save if we actually cleaned up something or initialized new periods
   if (hasChanges) {
     savePomodoroStats(stats);
   }
@@ -454,6 +474,36 @@ export const formatDuration = (minutes) => {
   }
 };
 
+// Check if we need to reset weekly stats (when week changes from Friday to Saturday)
+export const checkAndResetWeeklyStats = () => {
+  const stats = getPomodoroStats();
+  const currentWeekKey = getWeekStartDate();
+
+  // Check if we have any weekly stats yet
+  if (!stats.weekly[currentWeekKey]) {
+    // This is a new week, initialize it
+    stats.weekly[currentWeekKey] = { minutes: 0, sessions: 0, labels: {} };
+    savePomodoroStats(stats);
+  }
+
+  return stats;
+};
+
+// Check if we need to reset monthly stats (when month changes)
+export const checkAndResetMonthlyStats = () => {
+  const stats = getPomodoroStats();
+  const currentMonthKey = getCurrentMonth();
+
+  // Check if we have any monthly stats yet
+  if (!stats.monthly[currentMonthKey]) {
+    // This is a new month, initialize it
+    stats.monthly[currentMonthKey] = { minutes: 0, sessions: 0, labels: {} };
+    savePomodoroStats(stats);
+  }
+
+  return stats;
+};
+
 // Reset daily stats (called when day changes)
 export const resetDailyPomodoroStats = () => {
   const stats = getPomodoroStats();
@@ -469,6 +519,10 @@ export const resetDailyPomodoroStats = () => {
 
   // Reset today's stats to zero
   stats.daily[today] = { minutes: 0, sessions: 0, labels: {} };
+
+  // Also check if we need to initialize new weekly/monthly tracking
+  checkAndResetWeeklyStats();
+  checkAndResetMonthlyStats();
 
   savePomodoroStats(stats);
   console.log("🔄 Daily Pomodoro statistics reset for new day");

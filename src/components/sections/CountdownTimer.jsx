@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ClockIcon } from "../Icons";
 
 export const CountdownTimer = () => {
@@ -25,9 +25,14 @@ export const CountdownTimer = () => {
   }, []);
 
   return (
-    <div className="text-sm font-mono text-gray-600 flex items-center">
-      <ClockIcon className="w-5 h-5 mr-2 text-gray-500" />
-      {timeLeft}
+    <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg p-3 flex items-center justify-center">
+      <ClockIcon className="w-6 h-6 mr-3 text-red-600" />
+      <div className="text-center">
+        <div className="text-lg font-bold text-red-700 font-mono">
+          {timeLeft}
+        </div>
+        <div className="text-xs text-red-600 font-medium">Time left today</div>
+      </div>
     </div>
   );
 };

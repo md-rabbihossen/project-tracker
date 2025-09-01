@@ -1,5 +1,5 @@
-import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { addPomodoroTime, getAvailableLabels } from "../../utils/pomodoroStats";
 
 const TIMER_STATES = {
   WORK: "work",
@@ -7,81 +7,155 @@ const TIMER_STATES = {
   LONG_BREAK: "longBreak",
 };
 
-export const PomodoroTimer = ({ onSessionComplete }) => {
-  const [isRunning, setIsRunning] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 minutes in seconds
-  const [currentState, setCurrentState] = useState(TIMER_STATES.WORK);
-  const [sessionsCompleted, setSessionsCompleted] = useState(0);
+export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
+  // Use parent state as source of truth
+  const [isRunning, setIsRunning] = useState(initialState?.isRunning || false);
+  const [timeLeft, setTimeLeft] = useState(initialState?.timeLeft || 25 * 60);
+  const [currentState, setCurrentState] = useState(
+    initialState?.currentState || TIMER_STATES.WORK
+  );
+  const [sessionsCompleted] = useState(0);
   const [settings, setSettings] = useState({
     workTime: 25,
     shortBreak: 5,
     longBreak: 15,
     sessionsUntilLongBreak: 4,
   });
+  const [customTime, setCustomTime] = useState(25);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState("study");
+  const [availableLabels, setAvailableLabels] = useState([
+    "study",
+    "programming",
+    "other",
+  ]);
 
-  const intervalRef = useRef(null);
   const audioRef = useRef(null);
+  const initialTimeRef = useRef(0);
 
-  const handleSessionEnd = useCallback(() => {
-    setIsRunning(false);
-
-    // Play notification sound
-    if (audioRef.current) {
-      audioRef.current.play();
-    }
-
-    if (currentState === TIMER_STATES.WORK) {
-      const newSessionCount = sessionsCompleted + 1;
-      setSessionsCompleted(newSessionCount);
-
-      // Notify parent component about completed work session
-      if (onSessionComplete) {
-        onSessionComplete(settings.workTime);
-      }
-
-      // Determine next break type
-      if (newSessionCount % settings.sessionsUntilLongBreak === 0) {
-        setCurrentState(TIMER_STATES.LONG_BREAK);
-        setTimeLeft(settings.longBreak * 60);
-      } else {
-        setCurrentState(TIMER_STATES.SHORT_BREAK);
-        setTimeLeft(settings.shortBreak * 60);
-      }
-    } else {
-      // Break ended, start work session
-      setCurrentState(TIMER_STATES.WORK);
-      setTimeLeft(settings.workTime * 60);
-    }
-  }, [currentState, sessionsCompleted, settings, onSessionComplete]);
-
+  // Keep component state in sync with parent state
   useEffect(() => {
-    if (isRunning && timeLeft > 0) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0) {
-      handleSessionEnd();
+    if (initialState) {
+      setTimeLeft(initialState.timeLeft || 25 * 60);
+      setIsRunning(initialState.isRunning || false);
+      setCurrentState(initialState.currentState || TIMER_STATES.WORK);
     }
+  }, [initialState]);
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+  // Load available labels on mount
+  useEffect(() => {
+    const labels = getAvailableLabels();
+    setAvailableLabels(labels);
+    setSelectedLabel(labels[0] || "study");
+  }, []);
+
+  // Notify parent of state changes only when user initiates them, not during sync
+  const notifyParent = useCallback(
+    (newState) => {
+      if (onTimerStateChange) {
+        onTimerStateChange(newState);
       }
-    };
-  }, [isRunning, timeLeft, handleSessionEnd]);
+    },
+    [onTimerStateChange]
+  );
 
-  const startTimer = () => setIsRunning(true);
-  const pauseTimer = () => setIsRunning(false);
+  // Timer is now managed by parent component, no internal interval needed
+
+  const startTimer = () => {
+    console.log("🚀 Start button clicked!", {
+      timeLeft,
+      currentState,
+      isRunning,
+    });
+    setIsRunning(true);
+
+    // Store the initial time when starting
+    initialTimeRef.current = timeLeft;
+
+    // Immediately notify parent with complete state
+    const newState = {
+      isRunning: true,
+      timeLeft,
+      currentState,
+      totalTime: timeLeft, // Use timeLeft as totalTime since it reflects custom time
+    };
+    console.log("📡 Notifying parent with state:", newState);
+    notifyParent(newState);
+  };
+
+  const pauseTimer = () => {
+    setIsRunning(false);
+    // Use the stored initial time as totalTime
+    const totalTime = initialTimeRef.current || timeLeft;
+    // Immediately notify parent with complete state
+    notifyParent({
+      isRunning: false,
+      timeLeft,
+      currentState,
+      totalTime,
+    });
+  };
 
   const resetTimer = () => {
+    // Calculate elapsed time and add to statistics if timer was running
+    const initialTime = initialTimeRef.current || getCurrentTimerDuration();
+    const elapsedTime = initialTime - timeLeft;
+    const elapsedMinutes = Math.floor(elapsedTime / 60);
+
+    // Only track if more than 1 minute has elapsed
+    if (elapsedMinutes >= 1 && isRunning) {
+      addPomodoroTime(elapsedMinutes, selectedLabel);
+
+      // Show brief feedback about tracked time
+      if (window.showToast && typeof window.showToast === "function") {
+        window.showToast(
+          `Tracked ${elapsedMinutes} minute${
+            elapsedMinutes > 1 ? "s" : ""
+          } to ${selectedLabel} statistics`,
+          "pomodoro"
+        );
+      }
+    }
+
     setIsRunning(false);
     setCurrentState(TIMER_STATES.WORK);
     setTimeLeft(settings.workTime * 60);
+    initialTimeRef.current = 0; // Reset the initial time reference
+
+    notifyParent({
+      isRunning: false,
+      timeLeft: settings.workTime * 60,
+      currentState: TIMER_STATES.WORK,
+      totalTime: settings.workTime * 60,
+    });
   };
 
-  const skipSession = () => {
-    setIsRunning(false);
-    handleSessionEnd();
+  const getCurrentTimerDuration = () => {
+    switch (currentState) {
+      case TIMER_STATES.WORK:
+        return settings.workTime * 60;
+      case TIMER_STATES.SHORT_BREAK:
+        return settings.shortBreak * 60;
+      case TIMER_STATES.LONG_BREAK:
+        return settings.longBreak * 60;
+      default:
+        return settings.workTime * 60;
+    }
+  };
+
+  const setCustomWorkTime = (minutes) => {
+    const newTime = Math.max(1, Math.min(480, minutes)); // 1 min to 8 hours
+    setSettings({ ...settings, workTime: newTime });
+    setCustomTime(newTime);
+    if (currentState === TIMER_STATES.WORK && !isRunning) {
+      setTimeLeft(newTime * 60);
+    }
+    setShowCustomInput(false);
+  };
+
+  const handleCustomTimeSubmit = (e) => {
+    e.preventDefault();
+    setCustomWorkTime(customTime);
   };
 
   const formatTime = (seconds) => {
@@ -121,6 +195,11 @@ export const PomodoroTimer = ({ onSessionComplete }) => {
         <div className="flex items-center justify-center gap-2 mb-4">
           <span className="text-2xl">{stateInfo.icon}</span>
           <h2 className="text-xl font-bold text-gray-800">{stateInfo.label}</h2>
+          {currentState === TIMER_STATES.WORK && (
+            <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded-full ml-2">
+              {settings.workTime}min
+            </span>
+          )}
         </div>
 
         {/* Circular Progress */}
@@ -137,7 +216,7 @@ export const PomodoroTimer = ({ onSessionComplete }) => {
               strokeWidth="8"
               fill="none"
             />
-            <motion.circle
+            <circle
               cx="50"
               cy="50"
               r="45"
@@ -147,11 +226,9 @@ export const PomodoroTimer = ({ onSessionComplete }) => {
               strokeLinecap="round"
               strokeDasharray={`${2 * Math.PI * 45}`}
               strokeDashoffset={`${2 * Math.PI * 45 * (1 - progress / 100)}`}
-              initial={{ strokeDashoffset: 2 * Math.PI * 45 }}
-              animate={{
-                strokeDashoffset: 2 * Math.PI * 45 * (1 - progress / 100),
+              style={{
+                transition: "stroke-dashoffset 0.5s ease-in-out",
               }}
-              transition={{ duration: 0.5 }}
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
@@ -170,7 +247,13 @@ export const PomodoroTimer = ({ onSessionComplete }) => {
         <div className="flex justify-center gap-3 mb-4">
           {!isRunning ? (
             <button
-              onClick={startTimer}
+              onClick={() => {
+                console.log(
+                  "🔄 Start button clicked, current isRunning:",
+                  isRunning
+                );
+                startTimer();
+              }}
               className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
             >
               ▶️ Start
@@ -189,13 +272,6 @@ export const PomodoroTimer = ({ onSessionComplete }) => {
             className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             🔄 Reset
-          </button>
-
-          <button
-            onClick={skipSession}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            ⏭️ Skip
           </button>
         </div>
 
@@ -217,47 +293,118 @@ export const PomodoroTimer = ({ onSessionComplete }) => {
         </div>
 
         {/* Quick Settings */}
-        <div className="border-t pt-4">
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <button
-              onClick={() => {
-                setSettings({ ...settings, workTime: 25 });
-                if (currentState === TIMER_STATES.WORK && !isRunning) {
-                  setTimeLeft(25 * 60);
-                }
-              }}
-              className={`p-2 rounded ${
-                settings.workTime === 25 ? "bg-red-100" : "bg-gray-100"
-              }`}
+        <div className="border-t pt-4 space-y-4">
+          {/* Label Selection */}
+          <div className="text-center">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Study Category
+            </h4>
+            <select
+              value={selectedLabel}
+              onChange={(e) => setSelectedLabel(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-sm"
             >
-              🍅 25min
-            </button>
-            <button
-              onClick={() => {
-                setSettings({ ...settings, workTime: 45 });
-                if (currentState === TIMER_STATES.WORK && !isRunning) {
-                  setTimeLeft(45 * 60);
-                }
-              }}
-              className={`p-2 rounded ${
-                settings.workTime === 45 ? "bg-red-100" : "bg-gray-100"
-              }`}
-            >
-              📚 45min
-            </button>
-            <button
-              onClick={() => {
-                setSettings({ ...settings, workTime: 90 });
-                if (currentState === TIMER_STATES.WORK && !isRunning) {
-                  setTimeLeft(90 * 60);
-                }
-              }}
-              className={`p-2 rounded ${
-                settings.workTime === 90 ? "bg-red-100" : "bg-gray-100"
-              }`}
-            >
-              🎯 90min
-            </button>
+              {availableLabels.map((label) => (
+                <option key={label} value={label}>
+                  {label.charAt(0).toUpperCase() + label.slice(1)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Time will be tracked under this category
+            </p>
+          </div>
+          <div className="text-center">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Focus Time Presets
+            </h4>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <button
+                onClick={() => setCustomWorkTime(25)}
+                className={`p-2 rounded transition-colors ${
+                  settings.workTime === 25
+                    ? "bg-red-100 text-red-700 border-red-300"
+                    : "bg-gray-100 hover:bg-gray-200"
+                }`}
+              >
+                🍅 25min
+              </button>
+              <button
+                onClick={() => setCustomWorkTime(45)}
+                className={`p-2 rounded transition-colors ${
+                  settings.workTime === 45
+                    ? "bg-red-100 text-red-700 border-red-300"
+                    : "bg-gray-100 hover:bg-gray-200"
+                }`}
+              >
+                📚 45min
+              </button>
+              <button
+                onClick={() => setCustomWorkTime(90)}
+                className={`p-2 rounded transition-colors ${
+                  settings.workTime === 90
+                    ? "bg-red-100 text-red-700 border-red-300"
+                    : "bg-gray-100 hover:bg-gray-200"
+                }`}
+              >
+                🎯 90min
+              </button>
+            </div>
+          </div>
+
+          {/* Custom Time Input */}
+          <div className="text-center">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Custom Focus Time
+            </h4>
+            {!showCustomInput ? (
+              <button
+                onClick={() => {
+                  setShowCustomInput(true);
+                  setCustomTime(settings.workTime);
+                }}
+                className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium"
+              >
+                ⚙️ Set Custom Time
+              </button>
+            ) : (
+              <form onSubmit={handleCustomTimeSubmit} className="space-y-2">
+                <div className="flex items-center justify-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="480"
+                    value={customTime}
+                    onChange={(e) =>
+                      setCustomTime(parseInt(e.target.value) || 1)
+                    }
+                    className="w-20 px-2 py-1 text-center text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    autoFocus
+                  />
+                  <span className="text-sm text-gray-600">minutes</span>
+                </div>
+                <div className="flex justify-center gap-2">
+                  <button
+                    type="submit"
+                    className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors"
+                  >
+                    ✓ Set
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomInput(false)}
+                    className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
+                  >
+                    ✕ Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+            {!showCustomInput && ![25, 45, 90].includes(settings.workTime) && (
+              <div className="mt-2 text-xs text-indigo-600 font-medium">
+                Current: {settings.workTime} minutes
+              </div>
+            )}
           </div>
         </div>
       </div>

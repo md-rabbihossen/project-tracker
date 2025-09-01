@@ -66,6 +66,14 @@ export const AuthProvider = ({ children }) => {
             });
           }
 
+          // Sync Pomodoro stats to localStorage
+          if (data.pomodoroStats) {
+            localStorage.setItem(
+              "pomodoroStats",
+              JSON.stringify(data.pomodoroStats)
+            );
+          }
+
           // Trigger custom event for app to update its state
           window.dispatchEvent(
             new CustomEvent("firebaseDataUpdate", {
@@ -141,6 +149,9 @@ export const AuthProvider = ({ children }) => {
       const dailyProgressKey = `dailyProgress_${today}`;
       const todayProgress = localStorage.getItem(dailyProgressKey);
 
+      // Include Pomodoro stats in the sync
+      const pomodoroStats = localStorage.getItem("pomodoroStats");
+
       // Filter out undefined values to prevent Firebase errors
       const cleanUserData = Object.fromEntries(
         Object.entries(userData).filter(([, value]) => value !== undefined)
@@ -156,6 +167,15 @@ export const AuthProvider = ({ children }) => {
         dataToSync.dailyProgress = {
           [today]: JSON.parse(todayProgress),
         };
+      }
+
+      // Add Pomodoro stats if they exist
+      if (pomodoroStats) {
+        try {
+          dataToSync.pomodoroStats = JSON.parse(pomodoroStats);
+        } catch (error) {
+          console.warn("Failed to parse Pomodoro stats for sync:", error);
+        }
       }
 
       await setDoc(doc(db, "userData", user.id), dataToSync, { merge: true });

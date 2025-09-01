@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import DigitalTimerSound from "./assets/Digital Timer.mp3";
 import Logo from "./assets/logo.png";
 import Profile from "./assets/profile.jpg";
+import {
+  addPomodoroTime,
+  resetDailyPomodoroStats,
+} from "./utils/pomodoroStats";
 
 // Import components
 import {
@@ -18,6 +23,7 @@ import {
   UserCircleIcon,
 } from "./components/Icons";
 
+import { PomodoroAnalytics } from "./components/analytics/PomodoroAnalytics";
 import { LoginModal } from "./components/auth/LoginModal";
 import { RegisterModal } from "./components/auth/RegisterModal";
 import { ProgressCharts } from "./components/charts/ProgressCharts";
@@ -52,6 +58,7 @@ import {
 } from "./utils/helpers";
 
 import { TASK_CATEGORIES } from "./utils/taskCategories";
+import "./utils/toastUtils"; // Import to set up global toast function
 
 // Import auth context
 import { useAuth } from "./contexts/AuthContext";
@@ -322,6 +329,7 @@ const Week = ({
   onRenameTitle,
   isCurrentWeek,
   onOpenNewTaskModal,
+  onOpenProgressModal,
 }) => {
   const [isOpen, setIsOpen] = useState(isCurrentWeek);
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -492,6 +500,12 @@ const Week = ({
                     <div className="flex-grow">
                       <ProgressBar percentage={taskProgress} />
                     </div>
+                    <button
+                      onClick={() => onOpenProgressModal(topic)}
+                      className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs"
+                    >
+                      Add Progress
+                    </button>
                     {taskProgress >= 100 && (
                       <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
                         Completed
@@ -783,6 +797,7 @@ export default function App() {
   // Ref to prevent sync loops
   const isUpdatingFromFirebaseRef = useRef(false);
   const isUserAddingDataRef = useRef(false);
+  const syncTimeoutRef = useRef(null);
 
   // State for bottom navigation
   const [activeSection, setActiveSection] = useState("home");
@@ -792,6 +807,10 @@ export default function App() {
   const [books, setBooks] = useState(getInitialBooks());
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [todayProgress, setTodayProgress] = useState({
+    hoursCompleted: 0,
+    pagesRead: 0,
+  });
 
   const [masterAddTimeModalOpen, setMasterAddTimeModalOpen] = useState(false);
   const [spanningTaskModalOpen, setSpanningTaskModalOpen] = useState(false);
@@ -816,12 +835,120 @@ export default function App() {
     try {
       const saved = localStorage.getItem("userGoals");
       return saved ? JSON.parse(saved) : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   });
   const [addGoalModalOpen, setAddGoalModalOpen] = useState(false);
   const [showPomodoroTimer, setShowPomodoroTimer] = useState(false);
+
+  // Persistent Pomodoro timer state
+  const [pomodoroState, setPomodoroState] = useState({
+    isRunning: false,
+    timeLeft: 25 * 60, // 25 minutes in seconds
+    currentState: "work", // 'work', 'shortBreak', 'longBreak'
+    totalTime: 25 * 60,
+  });
+
+  // Pomodoro timer interval ref
+  const pomodoroIntervalRef = useRef(null);
+  // Audio ref for timer completion sound
+  const timerAudioRef = useRef(null);
+  // Ref to track if timer completion has been processed
+  const timerCompletedRef = useRef(false);
+
+  // Run Pomodoro timer independently of modal
+  useEffect(() => {
+    if (pomodoroState.isRunning && pomodoroState.timeLeft > 0) {
+      pomodoroIntervalRef.current = setInterval(() => {
+        setPomodoroState((prev) => ({
+          ...prev,
+          timeLeft: prev.timeLeft - 1,
+        }));
+      }, 1000);
+    } else {
+      if (pomodoroIntervalRef.current) {
+        clearInterval(pomodoroIntervalRef.current);
+        pomodoroIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (pomodoroIntervalRef.current) {
+        clearInterval(pomodoroIntervalRef.current);
+      }
+    };
+  }, [pomodoroState.isRunning, pomodoroState.timeLeft]);
+
+  // Handle timer completion
+  useEffect(() => {
+    if (
+      pomodoroState.timeLeft === 0 &&
+      pomodoroState.isRunning &&
+      !timerCompletedRef.current
+    ) {
+      // Mark as completed to prevent multiple processing
+      timerCompletedRef.current = true;
+
+      // Timer completed, stop it
+      setPomodoroState((prev) => ({
+        ...prev,
+        isRunning: false,
+      }));
+
+      // Add completed session time to statistics
+      const completedMinutes = Math.floor(pomodoroState.totalTime / 60);
+      if (completedMinutes > 0) {
+        addPomodoroTime(completedMinutes);
+      }
+
+      // Play timer completion sound
+      if (timerAudioRef.current) {
+        timerAudioRef.current.play().catch((error) => {
+          console.log("Could not play timer sound:", error);
+        });
+      }
+
+      // Show notification or toast
+      if (window.showToast && typeof window.showToast === "function") {
+        const completedMinutes = Math.floor(pomodoroState.totalTime / 60);
+        window.showToast(
+          `🍅 ${
+            pomodoroState.currentState === "work" ? "Focus session" : "Break"
+          } completed! ${completedMinutes} minutes tracked`,
+          "pomodoro"
+        );
+      }
+    }
+
+    // Reset the completion flag when timer is running (new session started)
+    if (pomodoroState.isRunning && pomodoroState.timeLeft > 0) {
+      timerCompletedRef.current = false;
+    }
+  }, [
+    pomodoroState.timeLeft,
+    pomodoroState.isRunning,
+    pomodoroState.currentState,
+    pomodoroState.totalTime,
+  ]);
+
+  // Pomodoro timer state management
+  const handlePomodoroStateChange = (timerState) => {
+    console.log("🔄 App received timer state change:", timerState);
+    // Update persistent timer state
+    setPomodoroState(timerState);
+  };
+
+  const handlePomodoroModalClose = () => {
+    // Just close the modal, don't set minimized since blue icon is hidden
+    setShowPomodoroTimer(false);
+    // Keep the timer running in background if it was running
+  };
+
+  const handlePomodoroIconClick = () => {
+    // Always just open the modal
+    setShowPomodoroTimer(true);
+  };
 
   useEffect(() => {
     setQuoteIndex((prev) => {
@@ -857,6 +984,7 @@ export default function App() {
             setTodayTasks(backendData.todayTasks || []);
             setBooks(backendData.books || []);
             setTodayDailyTasks(backendData.todayDailyTasks || []);
+            setTodayProgress(getTodayProgress());
 
             // Load user preferences
             if (backendData.userPreferences) {
@@ -937,10 +1065,37 @@ export default function App() {
         // No demo data - start with empty array
         setTodayTasks([]);
       }
+
+      // Load today's progress data
+      setTodayProgress(getTodayProgress());
     };
 
     loadData();
   }, [isAuthenticated, authLoading, getUserData]);
+
+  // Refresh today's progress when analytics section is active or when progress is updated
+  useEffect(() => {
+    if (activeSection === "analytics") {
+      setTodayProgress(getTodayProgress());
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    const handleProgressUpdate = () => {
+      setTodayProgress(getTodayProgress());
+    };
+
+    window.addEventListener("dailyProgressUpdate", handleProgressUpdate);
+    return () =>
+      window.removeEventListener("dailyProgressUpdate", handleProgressUpdate);
+  }, []);
+
+  // Update today's progress when analytics section becomes active
+  useEffect(() => {
+    if (activeSection === "analytics") {
+      setTodayProgress(getTodayProgress());
+    }
+  }, [activeSection]);
 
   // Listen for real-time Firebase updates
   useEffect(() => {
@@ -995,10 +1150,53 @@ export default function App() {
 
     window.addEventListener("firebaseDataUpdate", handleFirebaseUpdate);
 
+    // Throttle Firebase sync to prevent rapid consecutive calls
+    const throttledSync = () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      syncTimeoutRef.current = setTimeout(() => {
+        if (isAuthenticated && syncUserData && !isSyncing) {
+          try {
+            // Get current data and sync
+            const roadmapData = JSON.parse(
+              localStorage.getItem("roadmap") || "null"
+            );
+            const todayTasksData = JSON.parse(
+              localStorage.getItem("todayTasks") || "[]"
+            );
+            const booksData = JSON.parse(localStorage.getItem("books") || "[]");
+            const quoteIndex = localStorage.getItem("quoteIndex");
+
+            syncUserData({
+              roadmap: roadmapData,
+              todayTasks: todayTasksData,
+              books: booksData,
+              userPreferences: {
+                quoteIndex: quoteIndex ? parseInt(quoteIndex, 10) : 0,
+              },
+            });
+          } catch (error) {
+            console.warn("Global Firebase sync failed:", error);
+          }
+        }
+      }, 5000); // Throttle to max 1 sync per 5 seconds
+    };
+
+    // Expose throttled sync function for Pomodoro stats
+    window.syncToFirebase = throttledSync;
+
     return () => {
       window.removeEventListener("firebaseDataUpdate", handleFirebaseUpdate);
+      // Clean up timeout and global function
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      if (window.syncToFirebase) {
+        delete window.syncToFirebase;
+      }
     };
-  }, []); // Empty dependency array  // Handle daily progress updates separately
+  }, [isAuthenticated, isSyncing, syncUserData]); // Handle daily progress updates separately
   useEffect(() => {
     const handleDailyProgressUpdate = async (event) => {
       if (
@@ -1169,6 +1367,9 @@ export default function App() {
 
           // Reset daily progress
           saveTodayProgress(0, 0);
+
+          // Reset Pomodoro statistics for new day
+          resetDailyPomodoroStats();
 
           // Reset Today's Daily Tasks progress
           const resetTodayDailyTasks = todayDailyTasks.map((task) => ({
@@ -1731,6 +1932,21 @@ export default function App() {
   const [editingTodayTask, setEditingTodayTask] = useState(null);
   const [addTodayProgressModalOpen, setAddTodayProgressModalOpen] =
     useState(false);
+  const [weeklyProgressModalOpen, setWeeklyProgressModalOpen] = useState(false);
+  const [selectedWeeklyTask, setSelectedWeeklyTask] = useState(null);
+  const [selectedTodayTask, setSelectedTodayTask] = useState(null);
+
+  // Weekly Progress Modal
+  const openProgressModal = (task) => {
+    setSelectedWeeklyTask(task);
+    setWeeklyProgressModalOpen(true);
+  };
+
+  // Today Progress Modal
+  const openTodayProgressModal = (task) => {
+    setSelectedTodayTask(task);
+    setAddTodayProgressModalOpen(true);
+  };
 
   // --- Today Section Handlers ---
   const handleSaveTodayTaskFromModal = (taskData) => {
@@ -1826,6 +2042,49 @@ export default function App() {
     }
 
     setAddTodayProgressModalOpen(false);
+    setSelectedTodayTask(null);
+  };
+
+  const handleWeeklyProgressFromModal = (progressData) => {
+    const updatedRoadmap = {
+      ...roadmap,
+      phases: roadmap.phases.map((phase) => ({
+        ...phase,
+        weeks: phase.weeks.map((weekData) => ({
+          ...weekData,
+          topics: weekData.topics.map((topic) => {
+            if (topic.id === progressData.taskId) {
+              if (topic.type === "book") {
+                return {
+                  ...topic,
+                  completedPages: Math.min(
+                    (topic.completedPages || 0) + progressData.pages,
+                    topic.totalPages || 0
+                  ),
+                };
+              } else {
+                return {
+                  ...topic,
+                  completedMinutes: Math.min(
+                    (topic.completedMinutes || 0) + progressData.minutes,
+                    topic.totalMinutes || 0
+                  ),
+                };
+              }
+            }
+            return topic;
+          }),
+        })),
+      })),
+    };
+
+    setRoadmap(updatedRoadmap);
+    if (isAuthenticated) {
+      syncUserData({ roadmap: updatedRoadmap });
+    }
+
+    setWeeklyProgressModalOpen(false);
+    setSelectedWeeklyTask(null);
   };
 
   const handleDeleteTodayDailyTask = (taskId) => {
@@ -1901,15 +2160,6 @@ export default function App() {
                 <span className="text-lg font-mono text-indigo-600 font-semibold ml-4">
                   {overallProgressCalc.toFixed(2)}%
                 </span>
-              </div>
-              <div className="flex flex-col items-end sm:items-center w-full sm:w-auto">
-                <button
-                  onClick={() => setAddTodayProgressModalOpen(true)}
-                  className="bg-indigo-600 text-white font-bold p-2 sm:px-5 sm:py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center self-end sm:self-center"
-                >
-                  <PlusCircleIcon className="w-5 h-5 sm:mr-2" />
-                  <span className="hidden sm:inline">Add Progress</span>
-                </button>
               </div>
             </div>
             <div className="px-6 pb-6">
@@ -1996,6 +2246,16 @@ export default function App() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  openTodayProgressModal(task);
+                                }}
+                                className="p-1 text-gray-500 hover:text-blue-600"
+                                title="Add progress"
+                              >
+                                <PlusCircleIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setEditingTodayTask(task);
                                   setAddTodayTaskModalOpen(true);
                                 }}
@@ -2065,9 +2325,12 @@ export default function App() {
 
           <AddTodayProgressModal
             isOpen={addTodayProgressModalOpen}
-            onClose={() => setAddTodayProgressModalOpen(false)}
+            onClose={() => {
+              setAddTodayProgressModalOpen(false);
+              setSelectedTodayTask(null);
+            }}
             onSave={handleAddTodayProgressFromModal}
-            tasks={todayDailyTasks}
+            task={selectedTodayTask}
           />
         </section>
       </>
@@ -2141,34 +2404,70 @@ export default function App() {
         onSave={handleAddWeeks}
       />
 
+      <WeeklyProgressModal
+        isOpen={weeklyProgressModalOpen}
+        onClose={() => setWeeklyProgressModalOpen(false)}
+        onSave={handleWeeklyProgressFromModal}
+        task={selectedWeeklyTask}
+      />
+
       {/* Floating Pomodoro Timer Button */}
       <button
-        onClick={() => setShowPomodoroTimer(!showPomodoroTimer)}
-        className="fixed bottom-6 right-6 bg-red-500 hover:bg-red-600 text-white p-4 rounded-full shadow-lg transition-all z-40 flex items-center gap-2"
-        title="Pomodoro Timer"
+        onClick={handlePomodoroIconClick}
+        className={`fixed bottom-20 right-6 text-white p-4 rounded-full shadow-lg transition-all z-40 flex items-center gap-2 ${
+          pomodoroState.isRunning
+            ? "bg-green-500 hover:bg-green-600 animate-pulse"
+            : "bg-red-500 hover:bg-red-600"
+        }`}
+        title={
+          pomodoroState.isRunning
+            ? "Timer Running - Click to open"
+            : "Pomodoro Timer"
+        }
       >
         <Clock size={24} />
+        {pomodoroState.isRunning && (
+          <span className="text-xs font-bold bg-white text-green-600 px-2 py-1 rounded-full">
+            {Math.floor(pomodoroState.timeLeft / 60)}:
+            {String(pomodoroState.timeLeft % 60).padStart(2, "0")}
+          </span>
+        )}
       </button>
 
       {/* Pomodoro Timer Modal */}
       {showPomodoroTimer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 pb-24">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">
                 Pomodoro Timer
               </h3>
               <button
-                onClick={() => setShowPomodoroTimer(false)}
+                onClick={handlePomodoroModalClose}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X size={24} />
               </button>
             </div>
-            <PomodoroTimer />
+            <PomodoroTimer
+              onTimerStateChange={handlePomodoroStateChange}
+              initialState={pomodoroState}
+            />
           </div>
         </div>
       )}
+
+      {/* Minimized Pomodoro Timer Icon - Hidden */}
+      {/* {pomodoroMinimized && (
+        <div className="fixed bottom-20 right-4 z-40">
+          <button
+            onClick={handlePomodoroIconClick}
+            className="bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-colors"
+          >
+            <ClockIcon className="w-6 h-6" />
+          </button>
+        </div>
+      )} */}
 
       {/* Goal Modal */}
       <AddGoalModal
@@ -2188,6 +2487,11 @@ export default function App() {
 
       {/* Toast Notifications */}
       <CustomToaster />
+
+      {/* Hidden Audio Element for Timer Completion */}
+      <audio ref={timerAudioRef} preload="auto">
+        <source src={DigitalTimerSound} type="audio/mpeg" />
+      </audio>
 
       {/* Main Layout */}
       <div className="min-h-screen bg-gray-50 font-sans pb-20">
@@ -2245,15 +2549,6 @@ export default function App() {
                     {overallProgress.toFixed(2)}%
                   </span>
                 </div>
-                <div className="flex flex-col items-end sm:items-center w-full sm:w-auto">
-                  <button
-                    onClick={() => setMasterAddTimeModalOpen(true)}
-                    className="bg-indigo-600 text-white font-bold p-2 sm:px-5 sm:py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center self-end sm:self-center"
-                  >
-                    <PlusCircleIcon className="w-5 h-5 sm:mr-2" />
-                    <span className="hidden sm:inline">Add Progress</span>
-                  </button>
-                </div>
               </div>
               <div className="mt-4">
                 <ProgressBar percentage={overallProgress} />
@@ -2296,6 +2591,7 @@ export default function App() {
                       onRenameTitle={handleRenameWeekTitle}
                       isCurrentWeek={week.week === currentWeekNumber}
                       onOpenNewTaskModal={openNewTaskModal}
+                      onOpenProgressModal={openProgressModal}
                     />
                   ))}
               </section>
@@ -2319,6 +2615,9 @@ export default function App() {
           )}
           {activeSection === "analytics" && (
             <div className="space-y-8">
+              {/* Pomodoro Statistics Section - Moved to top */}
+              <PomodoroAnalytics />
+
               {/* Main Analytics Dashboard */}
               <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100">
                 <div className="flex items-center gap-3 mb-6">
@@ -2345,7 +2644,7 @@ export default function App() {
                           Today's Study Hours
                         </p>
                         <p className="text-3xl font-bold">
-                          {getTodayProgress().hoursCompleted.toFixed(1)}h
+                          {todayProgress.hoursCompleted.toFixed(1)}h
                         </p>
                         <p className="text-blue-200 text-sm mt-1">
                           Hours completed today
@@ -2361,7 +2660,7 @@ export default function App() {
                           Today's Pages Read
                         </p>
                         <p className="text-3xl font-bold">
-                          {getTodayProgress().pagesRead}
+                          {todayProgress.pagesRead}
                         </p>
                         <p className="text-green-200 text-sm mt-1">
                           Pages read today
@@ -4142,183 +4441,106 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
 }
 
 // Add Today Progress Modal Component
-function AddTodayProgressModal({ isOpen, onClose, onSave, tasks }) {
-  const [mode, setMode] = useState("time"); // 'time' or 'book'
-  const [selectedTaskId, setSelectedTaskId] = useState("");
+function AddTodayProgressModal({ isOpen, onClose, onSave, task }) {
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [pages, setPages] = useState("");
 
   useEffect(() => {
-    if (!isOpen) {
-      setSelectedTaskId("");
+    if (!isOpen || !task) {
       setHours("");
       setMinutes("");
       setPages("");
     }
-  }, [isOpen]);
-
-  // Filter tasks by type based on mode
-  const availableTimeTasks = tasks.filter((task) => task.type === "course");
-  const availableBookTasks = tasks.filter((task) => task.type === "book");
+  }, [isOpen, task]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!selectedTaskId) return;
+    if (!task) return;
 
-    let progressData;
-    if (mode === "time") {
+    let progressData = { taskId: task.id };
+
+    if (task.type === "book") {
+      const p = parseInt(pages) || 0;
+      if (p <= 0) return;
+      progressData.pages = p;
+    } else {
+      // Course type - handle time
       const h = parseInt(hours) || 0;
       const m = parseInt(minutes) || 0;
       if (h === 0 && m === 0) return;
 
-      // Convert minutes > 59 to hours and remaining minutes
-      const totalMinutes = h * 60 + m;
-      const finalHours = Math.floor(totalMinutes / 60);
-      const finalMinutes = totalMinutes % 60;
-
-      progressData = {
-        taskId: selectedTaskId,
-        hours: finalHours,
-        minutes: finalMinutes,
-      };
-    } else {
-      const p = parseInt(pages) || 0;
-      if (p <= 0) return;
-
-      progressData = {
-        taskId: selectedTaskId,
-        pages: p,
-      };
+      progressData.hours = h;
+      progressData.minutes = m;
     }
 
     onSave(progressData);
-    setSelectedTaskId("");
-    setHours("");
-    setMinutes("");
-    setPages("");
   };
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Progress">
-      {/* Tab buttons */}
-      <div className="flex border-b border-gray-200 mb-4">
-        <button
-          onClick={() => {
-            setMode("time");
-            setSelectedTaskId("");
-          }}
-          className={`px-4 py-2 text-sm font-medium ${
-            mode === "time"
-              ? "border-b-2 border-indigo-500 text-indigo-600"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Add Time
-        </button>
-        <button
-          onClick={() => {
-            setMode("book");
-            setSelectedTaskId("");
-          }}
-          className={`px-4 py-2 text-sm font-medium ${
-            mode === "book"
-              ? "border-b-2 border-indigo-500 text-indigo-600"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Add Book
-        </button>
-      </div>
+  if (!task) return null;
 
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Add Progress - ${task.name}`}
+    >
       <form onSubmit={handleSubmit}>
-        {mode === "time" ? (
+        {task.type === "book" ? (
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Course Task
+                Pages Read
               </label>
-              <select
-                value={selectedTaskId}
-                onChange={(e) => setSelectedTaskId(e.target.value)}
+              <input
+                type="number"
+                value={pages}
+                onChange={(e) => setPages(e.target.value)}
+                placeholder="Number of pages"
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                min="1"
+                autoFocus
                 required
-              >
-                <option value="">Choose a course task</option>
-                {availableTimeTasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.name}
-                  </option>
-                ))}
-              </select>
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Current: {task.progress || 0} / {task.total || 0} pages
+              </p>
             </div>
-            {selectedTaskId && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Time Progress
-                </label>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      value={hours}
-                      onChange={(e) => setHours(e.target.value)}
-                      placeholder="Hours"
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-                      min="0"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      value={minutes}
-                      onChange={(e) => setMinutes(e.target.value)}
-                      placeholder="Minutes"
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-                      min="0"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Book Task
+                Time Spent
               </label>
-              <select
-                value={selectedTaskId}
-                onChange={(e) => setSelectedTaskId(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-                required
-              >
-                <option value="">Choose a book task</option>
-                {availableBookTasks.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedTaskId && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pages Read
-                </label>
-                <input
-                  type="number"
-                  value={pages}
-                  onChange={(e) => setPages(e.target.value)}
-                  placeholder="Number of pages"
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-                  min="1"
-                  autoFocus
-                />
+              <div className="flex space-x-2">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    placeholder="Hours"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                    min="0"
+                  />
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={minutes}
+                    onChange={(e) => setMinutes(e.target.value)}
+                    placeholder="Minutes"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                    min="0"
+                    autoFocus
+                  />
+                </div>
               </div>
-            )}
+              <p className="text-sm text-gray-500 mt-1">
+                Current: {task.progressHours || 0}h {task.progressMinutes || 0}m
+                / {task.totalHours || 0}h {task.totalMinutes || 0}m
+              </p>
+            </div>
           </div>
         )}
         <div className="mt-6 flex justify-end space-x-2">
@@ -4333,7 +4555,134 @@ function AddTodayProgressModal({ isOpen, onClose, onSave, tasks }) {
             type="submit"
             className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
           >
-            Add
+            Add Progress
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Weekly Progress Modal Component
+function WeeklyProgressModal({ isOpen, onClose, onSave, task }) {
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [pages, setPages] = useState("");
+
+  useEffect(() => {
+    if (!isOpen || !task) {
+      setHours("");
+      setMinutes("");
+      setPages("");
+    }
+  }, [isOpen, task]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!task) return;
+
+    let progressData = { taskId: task.id };
+
+    if (task.type === "book") {
+      const p = parseInt(pages) || 0;
+      if (p <= 0) return;
+      progressData.pages = p;
+    } else {
+      // Course type - handle time
+      const h = parseInt(hours) || 0;
+      const m = parseInt(minutes) || 0;
+      if (h === 0 && m === 0) return;
+
+      // Convert to total minutes for storage
+      const totalMinutes = h * 60 + m;
+      progressData.minutes = totalMinutes;
+    }
+
+    onSave(progressData);
+  };
+
+  if (!task) return null;
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Add Progress - ${task.text}`}
+    >
+      <form onSubmit={handleSubmit}>
+        {task.type === "book" ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pages Read
+              </label>
+              <input
+                type="number"
+                value={pages}
+                onChange={(e) => setPages(e.target.value)}
+                placeholder="Number of pages"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                min="1"
+                autoFocus
+                required
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Current: {task.completedPages || 0} / {task.totalPages || 0}{" "}
+                pages
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Time Spent
+              </label>
+              <div className="flex space-x-2">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    placeholder="Hours"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                    min="0"
+                  />
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={minutes}
+                    onChange={(e) => setMinutes(e.target.value)}
+                    placeholder="Minutes"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                    min="0"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">
+                Current: {Math.floor((task.completedMinutes || 0) / 60)}h{" "}
+                {(task.completedMinutes || 0) % 60}m /{" "}
+                {Math.floor((task.totalMinutes || 0) / 60)}h{" "}
+                {(task.totalMinutes || 0) % 60}m
+              </p>
+            </div>
+          </div>
+        )}
+        <div className="mt-6 flex justify-end space-x-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+          >
+            Add Progress
           </button>
         </div>
       </form>

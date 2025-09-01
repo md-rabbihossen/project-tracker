@@ -76,3 +76,49 @@ export const showProgressToast = (taskName, progress) => {
     }
   );
 };
+
+export const showPomodoroToast = (message, type = "success") => {
+  const config = {
+    duration: 2500,
+    style: {
+      fontWeight: "500",
+    },
+  };
+
+  if (type === "success") {
+    toast.success(message, {
+      ...config,
+      icon: "⏱️",
+      style: {
+        ...config.style,
+        background: "#10B981",
+        color: "#fff",
+      },
+    });
+  } else if (type === "info") {
+    toast(message, {
+      ...config,
+      icon: "⏱️",
+      style: {
+        ...config.style,
+        background: "#3B82F6",
+        color: "#fff",
+      },
+    });
+  }
+};
+
+// Global toast function for use across the app
+if (typeof window !== "undefined") {
+  window.showToast = (message, type = "success") => {
+    if (type === "success") {
+      showSuccessToast(message);
+    } else if (type === "error") {
+      showErrorToast(message);
+    } else if (type === "info") {
+      showInfoToast(message);
+    } else if (type === "pomodoro") {
+      showPomodoroToast(message, "success");
+    }
+  };
+}

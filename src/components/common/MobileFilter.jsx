@@ -86,8 +86,34 @@ export const MobileFilter = ({
             className="absolute top-full mt-2 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg z-20"
           >
             <div className="p-4 max-h-80 overflow-y-auto">
-              {/* Categories Section */}
+              {/* Filter Section */}
               <div className="mb-4">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Filter
+                </div>
+                <div className="space-y-1">
+                  {filterOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        onFilterChange(option.value);
+                        setIsOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors flex items-center gap-3 ${
+                        filterType === option.value
+                          ? "bg-green-100 text-green-700 font-medium"
+                          : "hover:bg-gray-50 text-gray-700"
+                      }`}
+                    >
+                      <span className="text-base">{option.icon}</span>
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Categories Section */}
+              <div className="mb-4 pt-4 border-t border-gray-200">
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                   Categories
                 </div>
@@ -126,32 +152,6 @@ export const MobileFilter = ({
                       </motion.button>
                     );
                   })}
-                </div>
-              </div>
-
-              {/* Filter Section */}
-              <div className="mb-4 pt-4 border-t border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Filter
-                </div>
-                <div className="space-y-1">
-                  {filterOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        onFilterChange(option.value);
-                        setIsOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors flex items-center gap-3 ${
-                        filterType === option.value
-                          ? "bg-green-100 text-green-700 font-medium"
-                          : "hover:bg-gray-50 text-gray-700"
-                      }`}
-                    >
-                      <span className="text-base">{option.icon}</span>
-                      <span>{option.label}</span>
-                    </button>
-                  ))}
                 </div>
               </div>
 

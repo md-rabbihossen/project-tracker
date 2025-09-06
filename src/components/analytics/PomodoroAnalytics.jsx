@@ -6,15 +6,13 @@ import {
   addManualTime,
   cleanupOldStats,
   formatDuration,
+  getAllCurrentStats,
   getAvailableLabels,
   getLifetimeStats,
   getPomodoroGoals,
   getPreviousDayStats,
   getPreviousMonthStats,
   getPreviousWeekStats,
-  getThisMonthStats,
-  getThisWeekStats,
-  getTodayStats,
   removeLabel,
   updatePomodoroGoals,
 } from "../../utils/pomodoroStats";
@@ -98,28 +96,59 @@ export const PomodoroAnalytics = () => {
   useEffect(() => {
     // Clean up old stats and load current stats
     cleanupOldStats();
-    loadStats();
-    loadGoals();
-    loadLabels();
-    loadUserGoals();
 
-    // Set up interval to refresh stats every minute - temporarily disabled to debug reload issue
-    // const interval = setInterval(loadStats, 60000);
-    // return () => clearInterval(interval);
+    // Load stats with a small delay to ensure data structures are ready
+    const loadStatsWithDelay = () => {
+      setTimeout(() => {
+        loadStats();
+        loadGoals();
+        loadLabels();
+        loadUserGoals();
+      }, 100);
+    };
+
+    loadStatsWithDelay();
+
+    // Set up interval to refresh stats every minute
+    const interval = setInterval(() => {
+      console.log("🔄 Refreshing analytics stats...");
+      loadStats();
+    }, 60000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const loadStats = () => {
+    console.log("📊 Loading Pomodoro analytics stats...");
+
+    // Use the comprehensive stats getter for better initialization
+    const currentStats = getAllCurrentStats();
+    const lifetimeStats = getLifetimeStats();
+
+    console.log("📊 Loaded current stats:", currentStats);
+    console.log("📊 Loaded lifetime stats:", lifetimeStats);
+
     setStats({
-      today: getTodayStats(),
-      week: getThisWeekStats(),
-      month: getThisMonthStats(),
-      lifetime: getLifetimeStats(),
+      today: currentStats.daily,
+      week: currentStats.weekly,
+      month: currentStats.monthly,
+      lifetime: lifetimeStats,
+    });
+
+    const prevDayStats = getPreviousDayStats();
+    const prevWeekStats = getPreviousWeekStats();
+    const prevMonthStats = getPreviousMonthStats();
+
+    console.log("📊 Loaded previous stats:", {
+      previousDay: prevDayStats,
+      previousWeek: prevWeekStats,
+      previousMonth: prevMonthStats,
     });
 
     setPreviousStats({
-      previousDay: getPreviousDayStats(),
-      previousWeek: getPreviousWeekStats(),
-      previousMonth: getPreviousMonthStats(),
+      previousDay: prevDayStats,
+      previousWeek: prevWeekStats,
+      previousMonth: prevMonthStats,
     });
   };
 
@@ -156,7 +185,10 @@ export const PomodoroAnalytics = () => {
 
   const handleAddTime = (hours, minutes, label) => {
     addManualTime(hours, minutes, label);
-    loadStats(); // Refresh stats after adding time
+    // Force immediate refresh after adding time
+    setTimeout(() => {
+      loadStats();
+    }, 100);
   };
 
   const handleAddLabel = (newLabel) => {
@@ -173,7 +205,7 @@ export const PomodoroAnalytics = () => {
   const getWeekDateRange = () => {
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-    const daysToSaturday = dayOfWeek === 6 ? 0 : dayOfWeek + 1;
+    const daysToSaturday = dayOfWeek === 6 ? 0 : (dayOfWeek + 1) % 7; // Days to go back to Saturday
 
     const saturday = new Date(today);
     saturday.setDate(today.getDate() - daysToSaturday);
@@ -291,10 +323,9 @@ export const PomodoroAnalytics = () => {
             <p className="text-xs font-medium text-gray-500 mb-1 sm:mb-2">
               Breakdown:
             </p>
-            <div className="space-y-1 max-h-16 sm:max-h-none overflow-y-auto">
+            <div className="space-y-1 max-h-24 sm:max-h-32 overflow-y-auto">
               {Object.entries(labels)
                 .sort(([, a], [, b]) => b - a)
-                .slice(0, window.innerWidth < 640 ? 2 : 999) // Show only top 2 on mobile
                 .map(([label, minutes]) => (
                   <div key={label} className="flex justify-between text-xs">
                     <span className="text-gray-600 capitalize truncate">
@@ -305,11 +336,6 @@ export const PomodoroAnalytics = () => {
                     </span>
                   </div>
                 ))}
-              {Object.keys(labels).length > 2 && window.innerWidth < 640 && (
-                <div className="text-xs text-gray-400 text-center">
-                  +{Object.keys(labels).length - 2} more
-                </div>
-              )}
             </div>
           </div>
         )}

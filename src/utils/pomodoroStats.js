@@ -9,10 +9,16 @@ export const getCurrentDate = () => {
 export const getWeekStartDate = () => {
   const today = new Date();
   const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  const daysToSaturday = dayOfWeek === 6 ? 0 : dayOfWeek + 1; // Days to go back to Saturday
+  const daysToSaturday = dayOfWeek === 6 ? 0 : (dayOfWeek + 1) % 7; // Days to go back to Saturday
   const saturday = new Date(today);
   saturday.setDate(today.getDate() - daysToSaturday);
-  return saturday.toISOString().split("T")[0];
+  const weekStart = saturday.toISOString().split("T")[0];
+  console.log(
+    `📅 Current week starts on Saturday: ${weekStart} (today is ${
+      today.toISOString().split("T")[0]
+    })`
+  );
+  return weekStart;
 };
 
 // Get current month in YYYY-MM format
@@ -93,6 +99,51 @@ export const getPomodoroStats = () => {
   return initializePomodoroStats();
 };
 
+// Get all current stats (daily, weekly, monthly) with proper initialization
+export const getAllCurrentStats = () => {
+  const stats = getPomodoroStats();
+  const today = getCurrentDate();
+  const thisWeek = getWeekStartDate();
+  const thisMonth = getCurrentMonth();
+
+  // Initialize all current periods if they don't exist
+  let needsSave = false;
+
+  // Ensure today's stats exist
+  if (!stats.daily[today]) {
+    stats.daily[today] = { minutes: 0, sessions: 0, labels: {} };
+    needsSave = true;
+  }
+
+  // Ensure this week's stats exist
+  if (!stats.weekly[thisWeek]) {
+    stats.weekly[thisWeek] = { minutes: 0, sessions: 0, labels: {} };
+    needsSave = true;
+  }
+
+  // Ensure this month's stats exist
+  if (!stats.monthly[thisMonth]) {
+    stats.monthly[thisMonth] = { minutes: 0, sessions: 0, labels: {} };
+    needsSave = true;
+  }
+
+  // Save if any initialization was needed
+  if (needsSave) {
+    savePomodoroStats(stats);
+    console.log("📊 Initialized missing stats periods:", {
+      today,
+      thisWeek,
+      thisMonth,
+    });
+  }
+
+  return {
+    daily: stats.daily[today],
+    weekly: stats.weekly[thisWeek],
+    monthly: stats.monthly[thisMonth],
+  };
+};
+
 // Save stats to localStorage
 export const savePomodoroStats = (stats) => {
   localStorage.setItem("pomodoroStats", JSON.stringify(stats));
@@ -142,6 +193,11 @@ export const addPomodoroTime = (minutes, label = "study") => {
   const thisWeek = getWeekStartDate();
   const thisMonth = getCurrentMonth();
 
+  console.log(
+    `📊 Adding ${minutes} minutes of '${label}' to stats for ${today}`
+  );
+  console.log(`📅 Current week: ${thisWeek}, Current month: ${thisMonth}`);
+
   // Update daily stats
   if (!stats.daily[today]) {
     stats.daily[today] = { minutes: 0, sessions: 0, labels: {} };
@@ -186,6 +242,12 @@ export const addPomodoroTime = (minutes, label = "study") => {
   stats.lifetime.totalSessions += 1;
   stats.lifetime.labels[label] = (stats.lifetime.labels[label] || 0) + minutes;
 
+  console.log(`📊 Updated stats:`, {
+    daily: stats.daily[today],
+    weekly: stats.weekly[thisWeek],
+    monthly: stats.monthly[thisMonth],
+  });
+
   savePomodoroStats(stats);
   return stats;
 };
@@ -216,7 +278,7 @@ export const getThisWeekStats = () => {
   // Ensure this week's stats exist
   if (!stats.weekly[thisWeek]) {
     stats.weekly[thisWeek] = { minutes: 0, sessions: 0, labels: {} };
-    savePomodoroStats(stats);
+    // Don't save here to avoid potential race conditions during page load
   }
 
   const weekStats = stats.weekly[thisWeek];
@@ -226,6 +288,7 @@ export const getThisWeekStats = () => {
     weekStats.labels = {};
   }
 
+  console.log(`📊 Getting week stats for ${thisWeek}:`, weekStats);
   return weekStats;
 };
 
@@ -237,7 +300,7 @@ export const getThisMonthStats = () => {
   // Ensure this month's stats exist
   if (!stats.monthly[thisMonth]) {
     stats.monthly[thisMonth] = { minutes: 0, sessions: 0, labels: {} };
-    savePomodoroStats(stats);
+    // Don't save here to avoid potential race conditions during page load
   }
 
   const monthStats = stats.monthly[thisMonth];
@@ -247,6 +310,7 @@ export const getThisMonthStats = () => {
     monthStats.labels = {};
   }
 
+  console.log(`📊 Getting month stats for ${thisMonth}:`, monthStats);
   return monthStats;
 };
 
@@ -333,6 +397,7 @@ export const getPreviousWeekStats = () => {
   const previousWeek = new Date();
   previousWeek.setDate(previousWeek.getDate() - 7);
   const previousWeekStart = getWeekStartDateFromDate(previousWeek);
+
   const previousWeekStats = stats.weekly[previousWeekStart] || {
     minutes: 0,
     sessions: 0,
@@ -344,6 +409,11 @@ export const getPreviousWeekStats = () => {
     previousWeekStats.labels = {};
   }
 
+  console.log(
+    `📊 Previous week (${previousWeekStart}):`,
+    previousWeekStats.minutes,
+    "minutes"
+  );
   return previousWeekStats;
 };
 
@@ -371,10 +441,10 @@ export const getPreviousMonthStats = () => {
   return previousMonthStats;
 };
 
-// Helper function to get week start date from any date
+// Helper function to get week start date from any date (Saturday)
 export const getWeekStartDateFromDate = (date) => {
   const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  const daysToSaturday = dayOfWeek === 6 ? 0 : dayOfWeek + 1; // Days to go back to Saturday
+  const daysToSaturday = dayOfWeek === 6 ? 0 : (dayOfWeek + 1) % 7; // Days to go back to Saturday
   const saturday = new Date(date);
   saturday.setDate(date.getDate() - daysToSaturday);
   return saturday.toISOString().split("T")[0];
@@ -409,7 +479,7 @@ export const cleanupOldStats = () => {
   const twelveWeeksAgo = new Date(
     today.getTime() - 12 * 7 * 24 * 60 * 60 * 1000
   );
-  const weekCutoffDate = twelveWeeksAgo.toISOString().split("T")[0];
+  const weekCutoffDate = getWeekStartDateFromDate(twelveWeeksAgo);
 
   Object.keys(stats.weekly).forEach((date) => {
     if (date < weekCutoffDate) {
@@ -444,16 +514,21 @@ export const cleanupOldStats = () => {
   if (!stats.weekly[currentWeekKey]) {
     stats.weekly[currentWeekKey] = { minutes: 0, sessions: 0, labels: {} };
     hasChanges = true;
+    console.log(`📅 Initialized current week ${currentWeekKey} during cleanup`);
   }
 
   if (!stats.monthly[currentMonthKey]) {
     stats.monthly[currentMonthKey] = { minutes: 0, sessions: 0, labels: {} };
     hasChanges = true;
+    console.log(
+      `📅 Initialized current month ${currentMonthKey} during cleanup`
+    );
   }
 
   // Only save if we actually cleaned up something or initialized new periods
   if (hasChanges) {
     savePomodoroStats(stats);
+    console.log("🧹 Completed Pomodoro stats cleanup and initialization");
   }
 
   // Mark cleanup as performed for this session
@@ -508,6 +583,8 @@ export const checkAndResetMonthlyStats = () => {
 export const resetDailyPomodoroStats = () => {
   const stats = getPomodoroStats();
   const today = getCurrentDate();
+  const currentWeekKey = getWeekStartDate();
+  const currentMonthKey = getCurrentMonth();
 
   // Archive current day's stats in history if there's any data
   if (stats.daily[today] && stats.daily[today].minutes > 0) {
@@ -520,12 +597,22 @@ export const resetDailyPomodoroStats = () => {
   // Reset today's stats to zero
   stats.daily[today] = { minutes: 0, sessions: 0, labels: {} };
 
-  // Also check if we need to initialize new weekly/monthly tracking
-  checkAndResetWeeklyStats();
-  checkAndResetMonthlyStats();
+  // Ensure weekly stats structure exists (DO NOT reset weekly stats)
+  if (!stats.weekly[currentWeekKey]) {
+    stats.weekly[currentWeekKey] = { minutes: 0, sessions: 0, labels: {} };
+    console.log(`📅 Initialized new week tracking for ${currentWeekKey}`);
+  }
+
+  // Ensure monthly stats structure exists (DO NOT reset monthly stats)
+  if (!stats.monthly[currentMonthKey]) {
+    stats.monthly[currentMonthKey] = { minutes: 0, sessions: 0, labels: {} };
+    console.log(`📅 Initialized new month tracking for ${currentMonthKey}`);
+  }
 
   savePomodoroStats(stats);
   console.log("🔄 Daily Pomodoro statistics reset for new day");
+  console.log(`📊 Weekly stats preserved for ${currentWeekKey}`);
+  console.log(`📊 Monthly stats preserved for ${currentMonthKey}`);
 
   return stats;
 };

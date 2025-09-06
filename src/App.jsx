@@ -436,6 +436,10 @@ const Week = ({
                 const completed = topic.completedPages || 0;
                 const total = topic.totalPages || 1;
                 taskProgress = (completed / total) * 100;
+              } else if (topic.type === "day") {
+                const completed = topic.completedDays || 0;
+                const total = topic.totalDays || 1;
+                taskProgress = (completed / total) * 100;
               } else {
                 const completed = topic.completedMinutes || 0;
                 const total = topic.totalMinutes || 1;
@@ -1370,23 +1374,16 @@ export default function App() {
           // Reset Pomodoro statistics for new day
           resetDailyPomodoroStats();
 
-          // Reset Today's Daily Tasks progress
-          const resetTodayDailyTasks = todayDailyTasks.map((task) => ({
-            ...task,
-            ...(task.type === "course"
-              ? { progressHours: 0, progressMinutes: 0 }
-              : { progress: 0 }),
-          }));
+          // Note: Track Progress tasks are now persistent and won't reset daily
 
           // Update state first
           setTodayTasks(resetTasks);
-          setTodayDailyTasks(resetTodayDailyTasks);
 
           // Sync to Firebase immediately with all data
           await syncUserData({
             roadmap: roadmap || null,
             todayTasks: resetTasks,
-            todayDailyTasks: resetTodayDailyTasks,
+            todayDailyTasks: todayDailyTasks, // Keep existing tasks without reset
             books: books || [],
             todayTasksLastReset: today,
             userPreferences: {
@@ -1683,51 +1680,138 @@ export default function App() {
           });
         }
       }
+    } else if (type === "day") {
+      const totalDays = parseInt(taskData.days, 10) || 0;
+      if (totalDays <= 0) return;
+      const daysPerDay = Math.ceil(totalDays / (weeksToSpan * 7));
+      const dailyTaskText = `${name} - ${daysPerDay} Day${
+        daysPerDay > 1 ? "s" : ""
+      }`;
+      handleAddTodayTask(dailyTaskText, true);
+
+      const daysPerWeek = Math.floor(totalDays / weeksToSpan);
+      const remainderDays = totalDays % weeksToSpan;
+
+      for (let i = 0; i < weeksToSpan; i++) {
+        if (i >= visibleWeeks.length) break;
+        const week = visibleWeeks[i];
+        let weekDays = daysPerWeek + (i < remainderDays ? 1 : 0);
+        if (weekDays > 0) {
+          week.topics.push({
+            id: `spanning-day-${Date.now()}-${i}`,
+            text: name,
+            type: "day",
+            completedDays: 0,
+            totalDays: weekDays,
+          });
+        }
+      }
     }
 
     setRoadmap(newRoadmap);
     setSpanningTaskModalOpen(false);
   };
 
-  const handleAddWeeklyTask = (weekNumber, { name, hours, minutes }) => {
+  const handleAddWeeklyTask = (weekNumber, taskData) => {
     const newRoadmap = deepClone(roadmap);
     const week = newRoadmap.phases[0].weeks.find((w) => w.week === weekNumber);
     if (week) {
-      const totalMinutes =
-        (parseInt(hours, 10) || 0) * 60 + (parseInt(minutes, 10) || 0);
-      week.topics.push({
-        text: name,
-        totalMinutes: totalMinutes,
-        completedMinutes: 0,
-        id: `custom-roadmap-${Date.now()}`,
-        type: "time",
-      });
-
-      const dailyMinutes = totalMinutes / 7;
-      const dailyTaskText = `${name} - ${formatDailyMinutes(dailyMinutes)}`;
-      handleAddTodayTask(dailyTaskText, true);
-
-      // Also add to Today's section as a course task with daily portion (1/7th of weekly total)
-      const dailyHours = Math.floor(dailyMinutes / 60);
-      const remainingDailyMinutes = Math.round(dailyMinutes % 60);
-
-      const newTodayTask = {
-        id: `today-${Date.now()}`,
-        name: `${name} (Daily)`,
-        type: "course",
-        totalHours: dailyHours,
-        totalMinutes: remainingDailyMinutes,
-        progressHours: 0,
-        progressMinutes: 0,
-      };
-
-      const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
-      setTodayDailyTasks(updatedTodayTasks);
-
-      if (isAuthenticated) {
-        syncUserData({
-          todayDailyTasks: updatedTodayTasks,
+      if (taskData.type === "course") {
+        const totalMinutes =
+          (parseInt(taskData.hours, 10) || 0) * 60 +
+          (parseInt(taskData.minutes, 10) || 0);
+        week.topics.push({
+          text: taskData.name,
+          totalMinutes: totalMinutes,
+          completedMinutes: 0,
+          id: `custom-roadmap-${Date.now()}`,
+          type: "course",
         });
+
+        const dailyMinutes = totalMinutes / 7;
+        const dailyTaskText = `${taskData.name} - ${formatDailyMinutes(
+          dailyMinutes
+        )}`;
+        handleAddTodayTask(dailyTaskText, true);
+
+        // Also add to Track Progress section as a course task with daily portion (1/7th of weekly total)
+        const dailyHours = Math.floor(dailyMinutes / 60);
+        const remainingDailyMinutes = Math.round(dailyMinutes % 60);
+
+        const newTodayTask = {
+          id: `today-${Date.now()}`,
+          name: `${taskData.name} (Daily)`,
+          type: "course",
+          totalHours: dailyHours,
+          totalMinutes: remainingDailyMinutes,
+          progressHours: 0,
+          progressMinutes: 0,
+        };
+
+        const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
+        setTodayDailyTasks(updatedTodayTasks);
+
+        if (isAuthenticated) {
+          syncUserData({
+            todayDailyTasks: updatedTodayTasks,
+          });
+        }
+      } else if (taskData.type === "book") {
+        const totalPages = parseInt(taskData.pages, 10) || 0;
+        week.topics.push({
+          text: taskData.name,
+          totalPages: totalPages,
+          completedPages: 0,
+          id: `custom-roadmap-${Date.now()}`,
+          type: "book",
+        });
+
+        // Also add to Track Progress section as a book task with daily portion (1/7th of weekly total)
+        const dailyPages = Math.ceil(totalPages / 7);
+        const newTodayTask = {
+          id: `today-${Date.now()}`,
+          name: `${taskData.name} (Daily)`,
+          type: "book",
+          total: dailyPages,
+          progress: 0,
+        };
+
+        const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
+        setTodayDailyTasks(updatedTodayTasks);
+
+        if (isAuthenticated) {
+          syncUserData({
+            todayDailyTasks: updatedTodayTasks,
+          });
+        }
+      } else if (taskData.type === "day") {
+        const totalDays = parseInt(taskData.days, 10) || 0;
+        week.topics.push({
+          text: taskData.name,
+          totalDays: totalDays,
+          completedDays: 0,
+          id: `custom-roadmap-${Date.now()}`,
+          type: "day",
+        });
+
+        // Also add to Track Progress section as a day task with daily portion (1/7th of weekly total)
+        const dailyDays = Math.ceil(totalDays / 7);
+        const newTodayTask = {
+          id: `today-${Date.now()}`,
+          name: `${taskData.name} (Daily)`,
+          type: "day",
+          total: dailyDays,
+          progress: 0,
+        };
+
+        const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
+        setTodayDailyTasks(updatedTodayTasks);
+
+        if (isAuthenticated) {
+          syncUserData({
+            todayDailyTasks: updatedTodayTasks,
+          });
+        }
       }
     }
     setRoadmap(newRoadmap);
@@ -1888,6 +1972,10 @@ export default function App() {
             const completed = topic.completedPages || 0;
             const total = topic.totalPages || 1;
             totalProgress += (completed / total) * 100;
+          } else if (topic.type === "day") {
+            const completed = topic.completedDays || 0;
+            const total = topic.totalDays || 1;
+            totalProgress += (completed / total) * 100;
           } else {
             const completed = topic.completedMinutes || 0;
             const total = topic.totalMinutes || 1;
@@ -1900,10 +1988,11 @@ export default function App() {
   }, [roadmap]);
 
   const aggregatedStats = useMemo(() => {
-    if (!roadmap) return { courses: {}, books: {} };
+    if (!roadmap) return { courses: {}, books: {}, challenges: {} };
 
     const courses = {};
     const books = {};
+    const challenges = {};
 
     roadmap.phases.forEach((phase) => {
       phase.weeks.forEach((week) => {
@@ -1911,6 +2000,9 @@ export default function App() {
           if (topic.type === "book") {
             if (!books[topic.text]) books[topic.text] = 0;
             books[topic.text] += topic.completedPages || 0;
+          } else if (topic.type === "day") {
+            if (!challenges[topic.text]) challenges[topic.text] = 0;
+            challenges[topic.text] += topic.completedDays || 0;
           } else {
             if (!courses[topic.text]) courses[topic.text] = 0;
             courses[topic.text] += topic.completedMinutes || 0;
@@ -1919,7 +2011,7 @@ export default function App() {
       });
     });
 
-    return { courses, books };
+    return { courses, books, challenges };
   }, [roadmap]);
 
   const openNewTaskModal = (weekNumber) => {
@@ -2020,6 +2112,24 @@ export default function App() {
       if (isAuthenticated) {
         syncUserData({ todayDailyTasks: updatedTasks });
       }
+    } else if (progressData.days !== undefined) {
+      // Handle day-based progress
+      const updatedTasks = todayDailyTasks.map((task) =>
+        task.id === progressData.taskId
+          ? {
+              ...task,
+              progress: Math.min(
+                (task.progress || 0) + progressData.days,
+                task.total || 0
+              ),
+            }
+          : task
+      );
+
+      setTodayDailyTasks(updatedTasks);
+      if (isAuthenticated) {
+        syncUserData({ todayDailyTasks: updatedTasks });
+      }
     } else {
       // Handle page-based progress
       const updatedTasks = todayDailyTasks.map((task) =>
@@ -2059,6 +2169,14 @@ export default function App() {
                   completedPages: Math.min(
                     (topic.completedPages || 0) + progressData.pages,
                     topic.totalPages || 0
+                  ),
+                };
+              } else if (topic.type === "day") {
+                return {
+                  ...topic,
+                  completedDays: Math.min(
+                    (topic.completedDays || 0) + progressData.days,
+                    topic.totalDays || 0
                   ),
                 };
               } else {
@@ -2167,12 +2285,12 @@ export default function App() {
           </div>
         </section>
 
-        {/* Today Tasks Section */}
+        {/* Track Progress Section */}
         <section className="mb-8">
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
             <div className="w-full flex justify-between items-center p-6">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                Today
+                Track Progress
               </h2>
               <button
                 onClick={() => {
@@ -2188,7 +2306,7 @@ export default function App() {
             <div className="px-6 pb-6">
               {todayDailyTasks.length === 0 ? (
                 <div className="text-gray-500 text-center py-6">
-                  No daily tasks added yet.
+                  No progress tracking tasks added yet.
                 </div>
               ) : (
                 <ul className="space-y-4 mt-4">
@@ -2216,7 +2334,22 @@ export default function App() {
                         task.totalHours || 0,
                         task.totalMinutes || 0
                       );
+                    } else if (task.type === "book") {
+                      percent =
+                        (task.total || 0) > 0
+                          ? ((task.progress || 0) / (task.total || 0)) * 100
+                          : 0;
+                      progressDisplay = `${task.progress || 0}`;
+                      totalDisplay = `${task.total || 0}`;
+                    } else if (task.type === "day") {
+                      percent =
+                        (task.total || 0) > 0
+                          ? ((task.progress || 0) / (task.total || 0)) * 100
+                          : 0;
+                      progressDisplay = `${task.progress || 0}`;
+                      totalDisplay = `${task.total || 0}`;
                     } else {
+                      // Fallback for any other type
                       percent =
                         (task.total || 0) > 0
                           ? ((task.progress || 0) / (task.total || 0)) * 100
@@ -2304,7 +2437,11 @@ export default function App() {
                         <div className="text-xs text-gray-500">
                           {task.type === "course"
                             ? `${progressDisplay} of ${totalDisplay} completed`
-                            : `${progressDisplay} of ${totalDisplay} pages completed`}
+                            : task.type === "book"
+                            ? `${progressDisplay} of ${totalDisplay} pages completed`
+                            : task.type === "day"
+                            ? `${progressDisplay} of ${totalDisplay} days completed`
+                            : `${progressDisplay} of ${totalDisplay} completed`}
                         </div>
                       </li>
                     );
@@ -2641,7 +2778,7 @@ export default function App() {
               </div>
 
               {/* Profile Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircleIcon className="w-6 h-6 text-blue-600" />
@@ -2662,6 +2799,18 @@ export default function App() {
                     )}
                   </h3>
                   <p className="text-gray-600">Pages Read</p>
+                </div>
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center">
+                  <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CalendarIcon className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    {Object.values(aggregatedStats.challenges).reduce(
+                      (sum, days) => sum + days,
+                      0
+                    )}
+                  </h3>
+                  <p className="text-gray-600">Challenge Days</p>
                 </div>
                 <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center">
                   <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -2877,7 +3026,7 @@ export default function App() {
           >
             {" "}
             <BookOpenIcon className="w-6 h-6 mb-1" />{" "}
-            <span className="text-xs font-medium">Daily</span>{" "}
+            <span className="text-xs font-medium">Track</span>{" "}
           </button>
           <button
             className={`flex flex-col items-center flex-1 py-2 ${
@@ -3598,24 +3747,66 @@ function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
 
 function AddNewWeeklyTaskModal({ isOpen, onClose, onSave }) {
   const [name, setName] = useState("");
+  const [type, setType] = useState("course");
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
+  const [pages, setPages] = useState("");
+  const [days, setDays] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    let taskData;
+    if (type === "course") {
+      const h = parseInt(hours) || 0;
+      const m = parseInt(minutes) || 0;
+      if (h === 0 && m === 0) return;
+
+      taskData = {
+        name: name.trim(),
+        type: type,
+        hours: h,
+        minutes: m,
+      };
+    } else if (type === "book") {
+      const p = parseInt(pages) || 0;
+      if (p <= 0) return;
+
+      taskData = {
+        name: name.trim(),
+        type: type,
+        pages: p,
+      };
+    } else if (type === "day") {
+      const d = parseInt(days) || 0;
+      if (d <= 0) return;
+
+      taskData = {
+        name: name.trim(),
+        type: type,
+        days: d,
+      };
+    }
+
     if (name.trim()) {
-      onSave({ name: name.trim(), hours: hours || 0, minutes: minutes || 0 });
+      onSave(taskData);
       setName("");
+      setType("course");
       setHours("");
       setMinutes("");
+      setPages("");
+      setDays("");
     }
   };
 
   useEffect(() => {
     if (!isOpen) {
       setName("");
+      setType("course");
       setHours("");
       setMinutes("");
+      setPages("");
+      setDays("");
     }
   }, [isOpen]);
 
@@ -3643,32 +3834,76 @@ function AddNewWeeklyTaskModal({ isOpen, onClose, onSave }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Total Time
+              Type
             </label>
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <input
-                  type="number"
-                  value={hours}
-                  onChange={(e) => setHours(e.target.value)}
-                  placeholder="Hours"
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                  min="0"
-                />
-              </div>
-              <div className="flex-1">
-                <input
-                  type="number"
-                  value={minutes}
-                  onChange={(e) => setMinutes(e.target.value)}
-                  placeholder="Minutes"
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                  min="0"
-                  max="59"
-                />
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+            >
+              <option value="course">Course (Time)</option>
+              <option value="book">Book (Pages)</option>
+              <option value="day">Challenge (Days)</option>
+            </select>
+          </div>
+          {type === "course" ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Time
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    placeholder="Hours"
+                    className="w-full p-2 border border-gray-300 rounded-lg"
+                    min="0"
+                  />
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={minutes}
+                    onChange={(e) => setMinutes(e.target.value)}
+                    placeholder="Minutes"
+                    className="w-full p-2 border border-gray-300 rounded-lg"
+                    min="0"
+                    max="59"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          ) : type === "book" ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Pages
+              </label>
+              <input
+                type="number"
+                value={pages}
+                onChange={(e) => setPages(e.target.value)}
+                placeholder="Number of pages"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                min="1"
+              />
+            </div>
+          ) : type === "day" ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Days
+              </label>
+              <input
+                type="number"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                placeholder="e.g., 50 for 50-day challenge"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                min="1"
+              />
+            </div>
+          ) : null}
         </div>
         <div className="mt-6 flex justify-end space-x-2">
           <button
@@ -3691,11 +3926,12 @@ function AddNewWeeklyTaskModal({ isOpen, onClose, onSave }) {
 }
 
 function AddSpanningTaskModal({ isOpen, onClose, onSave }) {
-  const [mode, setMode] = useState("task"); // 'task' or 'book'
+  const [mode, setMode] = useState("task"); // 'task', 'book', or 'day'
   const [name, setName] = useState("");
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [pages, setPages] = useState("");
+  const [days, setDays] = useState("");
   const [numWeeks, setNumWeeks] = useState("");
 
   const handleSubmit = (e) => {
@@ -3703,8 +3939,10 @@ function AddSpanningTaskModal({ isOpen, onClose, onSave }) {
     if (name.trim() && numWeeks > 0) {
       if (mode === "task") {
         onSave({ type: "time", name: name.trim(), hours, minutes, numWeeks });
-      } else {
+      } else if (mode === "book") {
         onSave({ type: "book", name: name.trim(), pages, numWeeks });
+      } else if (mode === "day") {
+        onSave({ type: "day", name: name.trim(), days, numWeeks });
       }
     }
   };
@@ -3715,6 +3953,7 @@ function AddSpanningTaskModal({ isOpen, onClose, onSave }) {
       setHours("");
       setMinutes("");
       setPages("");
+      setDays("");
       setNumWeeks("");
       setMode("task");
     }
@@ -3743,6 +3982,16 @@ function AddSpanningTaskModal({ isOpen, onClose, onSave }) {
         >
           Book
         </button>
+        <button
+          onClick={() => setMode("day")}
+          className={`px-4 py-2 text-sm font-medium ${
+            mode === "day"
+              ? "border-b-2 border-indigo-500 text-indigo-600"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Challenge
+        </button>
       </div>
       <form onSubmit={handleSubmit}>
         <div className="space-y-4">
@@ -3751,7 +4000,7 @@ function AddSpanningTaskModal({ isOpen, onClose, onSave }) {
               htmlFor="spanning-task-name"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              {mode === "task" ? "Task Name" : "Book Title"}
+              {mode === "task" ? "Task Name" : "Challenge Name"}
             </label>
             <input
               type="text"
@@ -3761,7 +4010,7 @@ function AddSpanningTaskModal({ isOpen, onClose, onSave }) {
               placeholder={
                 mode === "task"
                   ? "e.g., Master a New Skill"
-                  : "e.g., The Great Gatsby"
+                  : "e.g., Atomic Habit"
               }
               className="w-full p-2 border border-gray-300 rounded-lg"
               autoFocus
@@ -3794,7 +4043,7 @@ function AddSpanningTaskModal({ isOpen, onClose, onSave }) {
                 />
               </div>
             </div>
-          ) : (
+          ) : mode === "book" ? (
             <div>
               <label
                 htmlFor="total-pages"
@@ -3813,7 +4062,26 @@ function AddSpanningTaskModal({ isOpen, onClose, onSave }) {
                 required
               />
             </div>
-          )}
+          ) : mode === "day" ? (
+            <div>
+              <label
+                htmlFor="total-days"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Total Number of Days
+              </label>
+              <input
+                type="number"
+                id="total-days"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                placeholder="e.g., 50 for 50-day challenge"
+                className="w-full p-2 border border-gray-300 rounded-lg"
+                min="1"
+                required
+              />
+            </div>
+          ) : null}
 
           <div>
             <label
@@ -3939,6 +4207,7 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [pages, setPages] = useState("");
+  const [days, setDays] = useState("");
 
   useEffect(() => {
     if (editingTask) {
@@ -3948,10 +4217,17 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
         setHours((editingTask.totalHours || 0).toString());
         setMinutes((editingTask.totalMinutes || 0).toString());
         setPages("");
-      } else {
+        setDays("");
+      } else if (editingTask.type === "book") {
         setHours("");
         setMinutes("");
         setPages((editingTask.total || 0).toString());
+        setDays("");
+      } else if (editingTask.type === "day") {
+        setHours("");
+        setMinutes("");
+        setPages("");
+        setDays((editingTask.total || 0).toString());
       }
     } else {
       setName("");
@@ -3959,6 +4235,7 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
       setHours("");
       setMinutes("");
       setPages("");
+      setDays("");
     }
   }, [editingTask, isOpen]);
 
@@ -3982,7 +4259,7 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
         totalHours: finalHours,
         totalMinutes: finalMinutes,
       };
-    } else {
+    } else if (type === "book") {
       const p = parseInt(pages) || 0;
       if (p <= 0) return;
 
@@ -3990,6 +4267,15 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
         name: name.trim(),
         type: type,
         total: p,
+      };
+    } else if (type === "day") {
+      const d = parseInt(days) || 0;
+      if (d <= 0) return;
+
+      taskData = {
+        name: name.trim(),
+        type: type,
+        total: d,
       };
     }
 
@@ -4000,6 +4286,7 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
       setHours("");
       setMinutes("");
       setPages("");
+      setDays("");
     }
   };
 
@@ -4007,7 +4294,7 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={editingTask ? "Edit Task" : "Add Today Task"}
+      title={editingTask ? "Edit Task" : "Add Progress Task"}
     >
       <form onSubmit={handleSubmit}>
         <div className="space-y-4">
@@ -4040,6 +4327,7 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
             >
               <option value="book">Book (Pages)</option>
               <option value="course">Course (Time)</option>
+              <option value="day">Challenge (Days)</option>
             </select>
           </div>
           {type === "course" ? (
@@ -4070,7 +4358,7 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : type === "book" ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Total Pages
@@ -4084,7 +4372,21 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
                 min="1"
               />
             </div>
-          )}
+          ) : type === "day" ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Days
+              </label>
+              <input
+                type="number"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                placeholder="e.g., 50 for 50-day challenge"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                min="1"
+              />
+            </div>
+          ) : null}
         </div>
         <div className="mt-6 flex justify-end space-x-2">
           <button
@@ -4111,12 +4413,14 @@ function AddTodayProgressModal({ isOpen, onClose, onSave, task }) {
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [pages, setPages] = useState("");
+  const [days, setDays] = useState("");
 
   useEffect(() => {
     if (!isOpen || !task) {
       setHours("");
       setMinutes("");
       setPages("");
+      setDays("");
     }
   }, [isOpen, task]);
 
@@ -4130,6 +4434,10 @@ function AddTodayProgressModal({ isOpen, onClose, onSave, task }) {
       const p = parseInt(pages) || 0;
       if (p <= 0) return;
       progressData.pages = p;
+    } else if (task.type === "day") {
+      const d = parseInt(days) || 0;
+      if (d <= 0) return;
+      progressData.days = d;
     } else {
       // Course type - handle time
       const h = parseInt(hours) || 0;
@@ -4170,6 +4478,27 @@ function AddTodayProgressModal({ isOpen, onClose, onSave, task }) {
               />
               <p className="text-sm text-gray-500 mt-1">
                 Current: {task.progress || 0} / {task.total || 0} pages
+              </p>
+            </div>
+          </div>
+        ) : task.type === "day" ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Days Completed
+              </label>
+              <input
+                type="number"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                placeholder="Number of days"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                min="1"
+                autoFocus
+                required
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Current: {task.progress || 0} / {task.total || 0} days completed
               </p>
             </div>
           </div>
@@ -4234,12 +4563,14 @@ function WeeklyProgressModal({ isOpen, onClose, onSave, task }) {
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [pages, setPages] = useState("");
+  const [days, setDays] = useState("");
 
   useEffect(() => {
     if (!isOpen || !task) {
       setHours("");
       setMinutes("");
       setPages("");
+      setDays("");
     }
   }, [isOpen, task]);
 
@@ -4253,6 +4584,10 @@ function WeeklyProgressModal({ isOpen, onClose, onSave, task }) {
       const p = parseInt(pages) || 0;
       if (p <= 0) return;
       progressData.pages = p;
+    } else if (task.type === "day") {
+      const d = parseInt(days) || 0;
+      if (d <= 0) return;
+      progressData.days = d;
     } else {
       // Course type - handle time
       const h = parseInt(hours) || 0;
@@ -4295,6 +4630,28 @@ function WeeklyProgressModal({ isOpen, onClose, onSave, task }) {
               <p className="text-sm text-gray-500 mt-1">
                 Current: {task.completedPages || 0} / {task.totalPages || 0}{" "}
                 pages
+              </p>
+            </div>
+          </div>
+        ) : task.type === "day" ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Days Completed
+              </label>
+              <input
+                type="number"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                placeholder="Number of days"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                min="1"
+                autoFocus
+                required
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Current: {task.completedDays || 0} / {task.totalDays || 0} days
+                completed
               </p>
             </div>
           </div>

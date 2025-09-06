@@ -600,6 +600,10 @@ export function formatProgress(topic) {
     const completed = topic.completedPages || 0;
     const total = topic.totalPages || 0;
     return `${completed} of ${total} Pages`;
+  } else if (topic.type === "day") {
+    const completed = topic.completedDays || 0;
+    const total = topic.totalDays || 0;
+    return `${completed} of ${total} Days Completed`;
   }
   const minutes = topic.completedMinutes || 0;
   const totalMinutes = topic.totalMinutes || 0;
@@ -699,6 +703,10 @@ export const calculateWeekProgress = (week) => {
     if (topic.type === "book") {
       const completed = topic.completedPages || 0;
       const total = topic.totalPages || 1;
+      return sum + (completed / total) * 100;
+    } else if (topic.type === "day") {
+      const completed = topic.completedDays || 0;
+      const total = topic.totalDays || 1;
       return sum + (completed / total) * 100;
     }
     const completed = topic.completedMinutes || 0;

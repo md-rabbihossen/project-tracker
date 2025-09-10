@@ -20,6 +20,7 @@ import { AddGoalModal, GoalCard } from "../goals/GoalComponents";
 import { AddTimeModal } from "../timer/AddTimeModal";
 
 export const PomodoroAnalytics = () => {
+  const [activeTab, setActiveTab] = useState("today");
   const [stats, setStats] = useState({
     today: { minutes: 0, sessions: 0, labels: {} },
     week: { minutes: 0, sessions: 0, labels: {} },
@@ -255,6 +256,80 @@ export const PomodoroAnalytics = () => {
     }
   };
 
+  // Progress Goal Component for individual periods
+  const ProgressGoalCard = ({
+    type,
+    currentMinutes,
+    goalMinutes,
+    color,
+    editValue,
+    onEditChange,
+  }) => (
+    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0 mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+          <span className="text-sm text-gray-600 capitalize">
+            {type} Target:
+          </span>
+          {editingGoals ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={
+                  type === "daily" ? "30" : type === "weekly" ? "180" : "720"
+                }
+                max={
+                  type === "daily"
+                    ? "1440"
+                    : type === "weekly"
+                    ? "10080"
+                    : "43200"
+                }
+                value={Math.round(editValue)}
+                onChange={(e) =>
+                  onEditChange(
+                    parseInt(e.target.value) ||
+                      (type === "daily" ? 30 : type === "weekly" ? 180 : 720)
+                  )
+                }
+                className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <span className="text-sm text-gray-600">
+                minutes ({formatDuration(editValue)})
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm font-medium text-gray-800">
+              {formatDuration(goalMinutes)}
+            </span>
+          )}
+        </div>
+        <span className="text-sm font-medium text-gray-800">
+          {formatDuration(currentMinutes)} / {formatDuration(goalMinutes)}
+        </span>
+      </div>
+
+      <div className="w-full bg-gray-200 rounded-full h-3">
+        <div
+          className={`h-3 rounded-full transition-all duration-300 ${color}`}
+          style={{
+            width: `${Math.min((currentMinutes / goalMinutes) * 100, 100)}%`,
+          }}
+        />
+      </div>
+
+      <div className="flex justify-between text-xs text-gray-500 mt-2">
+        <span>
+          {Math.round((currentMinutes / goalMinutes) * 100)}% complete
+        </span>
+        <span>
+          {formatRemainingTime(Math.max(0, goalMinutes - currentMinutes))}{" "}
+          remaining
+        </span>
+      </div>
+    </div>
+  );
+
   const StatCard = ({
     title,
     subtitle,
@@ -264,6 +339,11 @@ export const PomodoroAnalytics = () => {
     color,
     trend,
     previousValue,
+    showGoal = false,
+    goalMinutes = 0,
+    goalType = "",
+    editValue = 0,
+    onEditChange = () => {},
   }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -317,9 +397,33 @@ export const PomodoroAnalytics = () => {
           {value > 0 && <span>{Math.round(value / sessions || 0)}min avg</span>}
         </div>
 
+        {/* Progress Goal Section */}
+        {showGoal && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <ProgressGoalCard
+              type={goalType}
+              currentMinutes={value}
+              goalMinutes={goalMinutes}
+              color={
+                color.includes("blue")
+                  ? "bg-blue-500"
+                  : color.includes("green")
+                  ? "bg-green-500"
+                  : "bg-purple-500"
+              }
+              editValue={editValue}
+              onEditChange={onEditChange}
+            />
+          </div>
+        )}
+
         {/* Labels breakdown */}
         {Object.keys(labels).length > 0 && (
-          <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-gray-100">
+          <div
+            className={`${
+              showGoal ? "mt-3" : "mt-2 sm:mt-3"
+            } pt-2 sm:pt-3 border-t border-gray-100`}
+          >
             <p className="text-xs font-medium text-gray-500 mb-1 sm:mb-2">
               Breakdown:
             </p>
@@ -359,288 +463,360 @@ export const PomodoroAnalytics = () => {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setShowAddTimeModal(true)}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 sm:py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm sm:text-base"
-        >
-          <Plus size={18} sm:size={20} />
-          Add Time
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <StatCard
-          title="Today"
-          subtitle={new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "short",
-            day: "numeric",
-          })}
-          value={stats.today.minutes}
-          sessions={stats.today.sessions}
-          labels={stats.today.labels}
-          color="border-blue-200"
-          previousValue={previousStats.previousDay.minutes}
-        />
-
-        <StatCard
-          title="This Week"
-          subtitle={getWeekDateRange()}
-          value={stats.week.minutes}
-          sessions={stats.week.sessions}
-          labels={stats.week.labels}
-          color="border-green-200"
-          previousValue={previousStats.previousWeek.minutes}
-        />
-
-        <StatCard
-          title="This Month"
-          subtitle={getCurrentMonthName()}
-          value={stats.month.minutes}
-          sessions={stats.month.sessions}
-          labels={stats.month.labels}
-          color="border-purple-200"
-          previousValue={previousStats.previousMonth.minutes}
-        />
-
-        <StatCard
-          title="Lifetime"
-          subtitle={`${getLifetimeDays()} days tracking`}
-          value={stats.lifetime.totalMinutes}
-          sessions={stats.lifetime.totalSessions}
-          labels={stats.lifetime.labels}
-          color="border-orange-200"
-        />
-      </div>
-
-      {/* Progress Bars with Editable Goals */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg border border-gray-100"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">
-            Progress Goals
-          </h3>
-          <div className="flex items-center gap-2">
-            {!editingGoals ? (
+        <div className="flex items-center gap-2">
+          {!editingGoals ? (
+            <button
+              onClick={handleEditGoals}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors"
+            >
+              <Edit2 size={14} />
+              Edit Goals
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
               <button
-                onClick={handleEditGoals}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors"
+                onClick={handleSaveGoals}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
               >
-                <Edit2 size={14} />
-                Edit Goals
+                <Check size={14} />
+                Save
               </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleSaveGoals}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                >
-                  <Check size={14} />
-                  Save
-                </button>
-                <button
-                  onClick={handleCancelEdit}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <X size={14} />
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
+              <button
+                onClick={handleCancelEdit}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <X size={14} />
+                Cancel
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setShowAddTimeModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
+          >
+            <Plus size={18} />
+            Add Time
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="flex border-b border-gray-200 overflow-x-auto">
+          {[
+            { id: "today", label: "Today", icon: Clock },
+            { id: "week", label: "This Week", icon: TrendingUp },
+            { id: "month", label: "This Month", icon: Target },
+            { id: "lifetime", label: "Lifetime", icon: Clock },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === tab.id
+                  ? "border-indigo-500 text-indigo-600 bg-indigo-50"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <tab.icon size={16} />
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-4 sm:space-y-6">
-          {/* Daily Goal */}
-          <div>
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0 mb-2">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                <span className="text-xs sm:text-sm text-gray-600">
-                  Daily Target:
-                </span>
-                {editingGoals ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="30"
-                      max="1440"
-                      value={Math.round(tempGoals.dailyMinutes)}
-                      onChange={(e) =>
-                        setTempGoals((prev) => ({
-                          ...prev,
-                          dailyMinutes: parseInt(e.target.value) || 30,
-                        }))
-                      }
-                      className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <span className="text-xs sm:text-sm text-gray-600">
-                      minutes ({formatDuration(tempGoals.dailyMinutes)})
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-xs sm:text-sm font-medium text-gray-800">
-                    {formatDuration(goals.dailyMinutes)}
-                  </span>
-                )}
-              </div>
-              <span className="text-xs sm:text-sm font-medium text-gray-800">
-                {formatDuration(stats.today.minutes)} /{" "}
-                {formatDuration(goals.dailyMinutes)}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3">
-              <div
-                className="bg-blue-500 h-2 sm:h-3 rounded-full transition-all duration-300"
-                style={{
-                  width: `${Math.min(
-                    (stats.today.minutes / goals.dailyMinutes) * 100,
-                    100
-                  )}%`,
-                }}
+        <div className="p-6">
+          {/* Today Tab */}
+          {activeTab === "today" && (
+            <div className="space-y-6">
+              <StatCard
+                title="Today"
+                subtitle={new Date().toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "short",
+                  day: "numeric",
+                })}
+                value={stats.today.minutes}
+                sessions={stats.today.sessions}
+                labels={stats.today.labels}
+                color="border-blue-200"
+                previousValue={previousStats.previousDay.minutes}
+                showGoal={true}
+                goalMinutes={goals.dailyMinutes}
+                goalType="daily"
+                editValue={tempGoals.dailyMinutes}
+                onEditChange={(value) =>
+                  setTempGoals((prev) => ({ ...prev, dailyMinutes: value }))
+                }
               />
-            </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>
-                {Math.round((stats.today.minutes / goals.dailyMinutes) * 100)}%
-                complete
-              </span>
-              <span>
-                {formatRemainingTime(
-                  Math.max(0, goals.dailyMinutes - stats.today.minutes)
-                )}{" "}
-                remaining
-              </span>
-            </div>
-          </div>
 
-          {/* Weekly Goal */}
-          <div>
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0 mb-2">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                <span className="text-xs sm:text-sm text-gray-600">
-                  Weekly Target:
-                </span>
-                {editingGoals ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="180"
-                      max="10080"
-                      value={Math.round(tempGoals.weeklyMinutes)}
-                      onChange={(e) =>
-                        setTempGoals((prev) => ({
-                          ...prev,
-                          weeklyMinutes: parseInt(e.target.value) || 180,
-                        }))
-                      }
-                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <span className="text-xs sm:text-sm text-gray-600">
-                      minutes ({formatDuration(tempGoals.weeklyMinutes)})
-                    </span>
+              {/* Previous Day Comparison */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <TrendingUp size={20} className="text-blue-600" />
+                  Previous Day Comparison
+                </h3>
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h4 className="font-semibold text-gray-800 mb-2">
+                    Yesterday
+                  </h4>
+                  <div className="text-lg font-bold text-blue-600">
+                    {formatDuration(previousStats.previousDay.minutes)}
                   </div>
-                ) : (
-                  <span className="text-xs sm:text-sm font-medium text-gray-800">
-                    {formatDuration(goals.weeklyMinutes)}
-                  </span>
-                )}
-              </div>
-              <span className="text-xs sm:text-sm font-medium text-gray-800">
-                {formatDuration(stats.week.minutes)} /{" "}
-                {formatDuration(goals.weeklyMinutes)}
-              </span>
+                  <p className="text-sm text-gray-600">
+                    {previousStats.previousDay.sessions} sessions
+                  </p>
+                  {Object.keys(previousStats.previousDay.labels || {}).length >
+                    0 && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      <strong>Breakdown:</strong>{" "}
+                      {Object.entries(previousStats.previousDay.labels)
+                        .map(
+                          ([label, minutes]) =>
+                            `${label}: ${formatDuration(minutes)}`
+                        )
+                        .join(", ")}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3">
-              <div
-                className="bg-green-500 h-2 sm:h-3 rounded-full transition-all duration-300"
-                style={{
-                  width: `${Math.min(
-                    (stats.week.minutes / goals.weeklyMinutes) * 100,
-                    100
-                  )}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>
-                {Math.round((stats.week.minutes / goals.weeklyMinutes) * 100)}%
-                complete
-              </span>
-              <span>
-                {formatRemainingTime(
-                  Math.max(0, goals.weeklyMinutes - stats.week.minutes)
-                )}{" "}
-                remaining
-              </span>
-            </div>
-          </div>
+          )}
 
-          {/* Monthly Goal */}
-          <div>
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0 mb-2">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                <span className="text-xs sm:text-sm text-gray-600">
-                  Monthly Target:
-                </span>
-                {editingGoals ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="720"
-                      max="43200"
-                      value={Math.round(tempGoals.monthlyMinutes)}
-                      onChange={(e) =>
-                        setTempGoals((prev) => ({
-                          ...prev,
-                          monthlyMinutes: parseInt(e.target.value) || 720,
-                        }))
-                      }
-                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <span className="text-xs sm:text-sm text-gray-600">
-                      minutes ({formatDuration(tempGoals.monthlyMinutes)})
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-xs sm:text-sm font-medium text-gray-800">
-                    {formatDuration(goals.monthlyMinutes)}
-                  </span>
-                )}
-              </div>
-              <span className="text-xs sm:text-sm font-medium text-gray-800">
-                {formatDuration(stats.month.minutes)} /{" "}
-                {formatDuration(goals.monthlyMinutes)}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 sm:h-3">
-              <div
-                className="bg-purple-500 h-2 sm:h-3 rounded-full transition-all duration-300"
-                style={{
-                  width: `${Math.min(
-                    (stats.month.minutes / goals.monthlyMinutes) * 100,
-                    100
-                  )}%`,
-                }}
+          {/* Week Tab */}
+          {activeTab === "week" && (
+            <div className="space-y-6">
+              <StatCard
+                title="This Week"
+                subtitle={getWeekDateRange()}
+                value={stats.week.minutes}
+                sessions={stats.week.sessions}
+                labels={stats.week.labels}
+                color="border-green-200"
+                previousValue={previousStats.previousWeek.minutes}
+                showGoal={true}
+                goalMinutes={goals.weeklyMinutes}
+                goalType="weekly"
+                editValue={tempGoals.weeklyMinutes}
+                onEditChange={(value) =>
+                  setTempGoals((prev) => ({ ...prev, weeklyMinutes: value }))
+                }
               />
+
+              {/* Previous Week Comparison */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <TrendingUp size={20} className="text-green-600" />
+                  Previous Week Comparison
+                </h3>
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h4 className="font-semibold text-gray-800 mb-2">
+                    Last Week
+                  </h4>
+                  <div className="text-lg font-bold text-green-600">
+                    {formatDuration(previousStats.previousWeek.minutes)}
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {previousStats.previousWeek.sessions} sessions
+                  </p>
+                  {Object.keys(previousStats.previousWeek.labels || {}).length >
+                    0 && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      <strong>Breakdown:</strong>{" "}
+                      {Object.entries(previousStats.previousWeek.labels)
+                        .map(
+                          ([label, minutes]) =>
+                            `${label}: ${formatDuration(minutes)}`
+                        )
+                        .join(", ")}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Weekly Insights */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                  Weekly Insights
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center bg-green-50 rounded-lg p-3">
+                    <div className="text-xl font-bold text-green-600">
+                      {stats.week.sessions > 0
+                        ? Math.round(stats.week.minutes / 7)
+                        : 0}
+                      min
+                    </div>
+                    <div className="text-sm text-gray-600">Daily Average</div>
+                  </div>
+                  <div className="text-center bg-green-50 rounded-lg p-3">
+                    <div className="text-xl font-bold text-green-600">
+                      {stats.week.sessions > 0
+                        ? Math.round(stats.week.minutes / stats.week.sessions)
+                        : 0}
+                      min
+                    </div>
+                    <div className="text-sm text-gray-600">Avg Session</div>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>
-                {Math.round((stats.month.minutes / goals.monthlyMinutes) * 100)}
-                % complete
-              </span>
-              <span>
-                {formatRemainingTime(
-                  Math.max(0, goals.monthlyMinutes - stats.month.minutes)
-                )}{" "}
-                remaining
-              </span>
+          )}
+
+          {/* Month Tab */}
+          {activeTab === "month" && (
+            <div className="space-y-6">
+              <StatCard
+                title="This Month"
+                subtitle={getCurrentMonthName()}
+                value={stats.month.minutes}
+                sessions={stats.month.sessions}
+                labels={stats.month.labels}
+                color="border-purple-200"
+                previousValue={previousStats.previousMonth.minutes}
+                showGoal={true}
+                goalMinutes={goals.monthlyMinutes}
+                goalType="monthly"
+                editValue={tempGoals.monthlyMinutes}
+                onEditChange={(value) =>
+                  setTempGoals((prev) => ({ ...prev, monthlyMinutes: value }))
+                }
+              />
+
+              {/* Previous Month Comparison */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl p-4 border border-purple-100"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <TrendingUp size={20} className="text-purple-600" />
+                  Previous Month Comparison
+                </h3>
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h4 className="font-semibold text-gray-800 mb-2">
+                    Last Month
+                  </h4>
+                  <div className="text-lg font-bold text-purple-600">
+                    {formatDuration(previousStats.previousMonth.minutes)}
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {previousStats.previousMonth.sessions} sessions
+                  </p>
+                  {Object.keys(previousStats.previousMonth.labels || {})
+                    .length > 0 && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      <strong>Breakdown:</strong>{" "}
+                      {Object.entries(previousStats.previousMonth.labels)
+                        .map(
+                          ([label, minutes]) =>
+                            `${label}: ${formatDuration(minutes)}`
+                        )
+                        .join(", ")}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Monthly Insights */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                  Monthly Insights
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center bg-purple-50 rounded-lg p-3">
+                    <div className="text-xl font-bold text-purple-600">
+                      {Math.round(stats.month.minutes / new Date().getDate())}
+                      min
+                    </div>
+                    <div className="text-sm text-gray-600">Daily Average</div>
+                  </div>
+                  <div className="text-center bg-purple-50 rounded-lg p-3">
+                    <div className="text-xl font-bold text-purple-600">
+                      {Math.round((stats.month.minutes / 60) * 10) / 10}h
+                    </div>
+                    <div className="text-sm text-gray-600">Total Hours</div>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-          </div>
+          )}
+
+          {/* Lifetime Tab */}
+          {activeTab === "lifetime" && (
+            <div className="space-y-6">
+              <StatCard
+                title="Lifetime"
+                subtitle={`${getLifetimeDays()} days tracking`}
+                value={stats.lifetime.totalMinutes}
+                sessions={stats.lifetime.totalSessions}
+                labels={stats.lifetime.labels}
+                color="border-orange-200"
+              />
+
+              {/* Lifetime Insights */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-100"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <TrendingUp size={20} className="text-orange-600" />
+                  Lifetime Statistics
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="text-center bg-white rounded-lg p-3 shadow-sm">
+                    <div className="text-lg font-bold text-orange-600">
+                      {stats.lifetime.totalSessions > 0
+                        ? Math.round(
+                            stats.lifetime.totalMinutes /
+                              stats.lifetime.totalSessions
+                          )
+                        : 0}
+                      min
+                    </div>
+                    <div className="text-xs text-gray-600">Avg Session</div>
+                  </div>
+                  <div className="text-center bg-white rounded-lg p-3 shadow-sm">
+                    <div className="text-lg font-bold text-orange-600">
+                      {Math.round((stats.lifetime.totalMinutes / 60) * 10) / 10}
+                      h
+                    </div>
+                    <div className="text-xs text-gray-600">Total Hours</div>
+                  </div>
+                  <div className="text-center bg-white rounded-lg p-3 shadow-sm">
+                    <div className="text-lg font-bold text-orange-600">
+                      {stats.lifetime.totalSessions}
+                    </div>
+                    <div className="text-xs text-gray-600">Total Sessions</div>
+                  </div>
+                  <div className="text-center bg-white rounded-lg p-3 shadow-sm">
+                    <div className="text-lg font-bold text-orange-600">
+                      {getLifetimeDays()}
+                    </div>
+                    <div className="text-xs text-gray-600">Days Tracked</div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
         </div>
-      </motion.div>
+      </div>
 
       {/* User Goals Section */}
       <motion.div
@@ -687,121 +863,6 @@ export const PomodoroAnalytics = () => {
             ))}
           </div>
         )}
-      </motion.div>
-
-      {/* Quick Insights */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-6 border border-red-100"
-      >
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <TrendingUp size={20} className="text-red-600" />
-          Quick Insights & Previous Periods
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="text-lg sm:text-2xl font-bold text-red-600">
-              {stats.lifetime.totalSessions > 0
-                ? Math.round(
-                    stats.lifetime.totalMinutes / stats.lifetime.totalSessions
-                  )
-                : 0}
-              min
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600">Avg Session</div>
-          </div>
-          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="text-lg sm:text-2xl font-bold text-orange-600">
-              {stats.week.sessions > 0 ? Math.round(stats.week.minutes / 7) : 0}
-              min
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600">Daily Avg</div>
-          </div>
-          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="text-lg sm:text-2xl font-bold text-yellow-600">
-              {stats.today.sessions}
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600">
-              Today's Sessions
-            </div>
-          </div>
-          <div className="text-center bg-white rounded-lg p-3 sm:p-4 shadow-sm">
-            <div className="text-lg sm:text-2xl font-bold text-green-600">
-              {Math.round((stats.lifetime.totalMinutes / 60) * 10) / 10}h
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600">Total Hours</div>
-          </div>
-        </div>
-
-        {/* Previous Periods Comparison */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-3 sm:pt-4 border-t border-red-200">
-          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
-            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
-              Previous Day
-            </h4>
-            <div className="text-base sm:text-lg font-bold text-blue-600">
-              {formatDuration(previousStats.previousDay.minutes)}
-            </div>
-            <p className="text-xs sm:text-sm text-gray-600">
-              {previousStats.previousDay.sessions} sessions
-            </p>
-            {Object.keys(previousStats.previousDay.labels || {}).length > 0 && (
-              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
-                {Object.entries(previousStats.previousDay.labels)
-                  .slice(0, 2) // Show only top 2 on mobile
-                  .map(
-                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
-                  )
-                  .join(", ")}
-              </div>
-            )}
-          </div>
-          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
-            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
-              Previous Week
-            </h4>
-            <div className="text-base sm:text-lg font-bold text-green-600">
-              {formatDuration(previousStats.previousWeek.minutes)}
-            </div>
-            <p className="text-xs sm:text-sm text-gray-600">
-              {previousStats.previousWeek.sessions} sessions
-            </p>
-            {Object.keys(previousStats.previousWeek.labels || {}).length >
-              0 && (
-              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
-                {Object.entries(previousStats.previousWeek.labels)
-                  .slice(0, 2) // Show only top 2 on mobile
-                  .map(
-                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
-                  )
-                  .join(", ")}
-              </div>
-            )}
-          </div>
-          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-sm">
-            <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">
-              Previous Month
-            </h4>
-            <div className="text-base sm:text-lg font-bold text-purple-600">
-              {formatDuration(previousStats.previousMonth.minutes)}
-            </div>
-            <p className="text-xs sm:text-sm text-gray-600">
-              {previousStats.previousMonth.sessions} sessions
-            </p>
-            {Object.keys(previousStats.previousMonth.labels || {}).length >
-              0 && (
-              <div className="mt-1 sm:mt-2 text-xs text-gray-500 truncate">
-                {Object.entries(previousStats.previousMonth.labels)
-                  .slice(0, 2) // Show only top 2 on mobile
-                  .map(
-                    ([label, minutes]) => `${label}: ${formatDuration(minutes)}`
-                  )
-                  .join(", ")}
-              </div>
-            )}
-          </div>
-        </div>
       </motion.div>
 
       {/* Add Time Modal */}

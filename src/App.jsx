@@ -193,9 +193,6 @@ const TodayTasksSection = ({
                 {todayString}
               </span>
             </h2>
-            <span className="text-lg font-mono text-indigo-600 font-semibold">
-              {progress.toFixed(2)}%
-            </span>
           </div>
           <div className="mt-2">
             <CountdownTimer />
@@ -213,6 +210,12 @@ const TodayTasksSection = ({
           taskCounts={taskCounts}
         />
 
+        <div className="flex justify-between items-center mb-2">
+          <span></span>
+          <span className="text-lg font-mono text-indigo-600 font-semibold">
+            {progress.toFixed(2)}%
+          </span>
+        </div>
         <ProgressBar percentage={progress} />
         <ul className="mt-6 space-y-3">
           {visibleTasks.map((task) => (

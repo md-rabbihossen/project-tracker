@@ -309,6 +309,13 @@ export const PomodoroAnalytics = () => {
         </span>
       </div>
 
+      <div className="flex justify-between items-center mb-2">
+        <span></span>
+        <span className="text-sm font-semibold text-gray-700">
+          {Math.round((currentMinutes / goalMinutes) * 100)}% complete
+        </span>
+      </div>
+
       <div className="w-full bg-gray-200 rounded-full h-3">
         <div
           className={`h-3 rounded-full transition-all duration-300 ${color}`}
@@ -319,9 +326,7 @@ export const PomodoroAnalytics = () => {
       </div>
 
       <div className="flex justify-between text-xs text-gray-500 mt-2">
-        <span>
-          {Math.round((currentMinutes / goalMinutes) * 100)}% complete
-        </span>
+        <span>Progress tracking</span>
         <span>
           {formatRemainingTime(Math.max(0, goalMinutes - currentMinutes))}{" "}
           remaining

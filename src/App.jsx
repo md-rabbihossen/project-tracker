@@ -26,8 +26,6 @@ import {
 } from "./components/Icons";
 
 import { PomodoroAnalytics } from "./components/analytics/PomodoroAnalytics";
-import { LoginModal } from "./components/auth/LoginModal";
-import { RegisterModal } from "./components/auth/RegisterModal";
 import { MobileFilter } from "./components/common/MobileFilter";
 import { Modal } from "./components/common/Modal";
 import { ProgressBar } from "./components/common/ProgressBar";
@@ -60,9 +58,6 @@ import {
 
 import { TASK_CATEGORIES } from "./utils/taskCategories";
 import "./utils/toastUtils"; // Import to set up global toast function
-
-// Import auth context
-import { useAuth } from "./contexts/AuthContext";
 
 const TodayTasksSection = ({
   tasks,
@@ -790,17 +785,7 @@ function AddEditBookModal({ isOpen, onClose, onSave, editingBook }) {
 
 // Main App Component
 export default function App() {
-  // Auth context
-  const {
-    isAuthenticated,
-    loading: authLoading,
-    syncUserData,
-    getUserData,
-    isSyncing,
-  } = useAuth();
-
-  // Ref to prevent sync loops
-  const isUpdatingFromFirebaseRef = useRef(false);
+  // Refs for various purposes
   const isUserAddingDataRef = useRef(false);
   const syncTimeoutRef = useRef(null);
 
@@ -966,86 +951,16 @@ export default function App() {
   // Helper function to update todayDailyTasks with localStorage support
   const updateTodayDailyTasks = (updatedTasks) => {
     setTodayDailyTasks(updatedTasks);
-
-    // Save to localStorage for non-authenticated users
-    if (!isAuthenticated) {
-      localStorage.setItem("todayDailyTasks", JSON.stringify(updatedTasks));
-    }
-
-    // Sync to Firebase for authenticated users
-    if (isAuthenticated) {
-      syncUserData({
-        todayDailyTasks: updatedTasks,
-      });
-    }
+    // Always save to localStorage for localStorage-only app
+    localStorage.setItem("todayDailyTasks", JSON.stringify(updatedTasks));
   };
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
 
-      if (authLoading) {
-        // Wait for auth to complete
-        return;
-      }
-
-      if (isAuthenticated) {
-        // User is logged in, try to load from backend first
-        try {
-          const backendData = await getUserData();
-          if (backendData) {
-            setRoadmap(backendData.roadmap);
-            setTodayTasks(backendData.todayTasks || []);
-            setBooks(backendData.books || []);
-            setTodayDailyTasks(backendData.todayDailyTasks || []);
-            setTodayProgress(getTodayProgress());
-
-            // Load user preferences
-            if (backendData.userPreferences) {
-              if (backendData.userPreferences.quoteIndex !== undefined) {
-                setQuoteIndex(backendData.userPreferences.quoteIndex);
-                localStorage.setItem(
-                  "quoteIndex",
-                  backendData.userPreferences.quoteIndex.toString()
-                );
-              }
-            }
-
-            // Also save to localStorage as backup
-            localStorage.setItem(
-              "roadmap",
-              JSON.stringify(backendData.roadmap)
-            );
-            localStorage.setItem(
-              "todayTasks",
-              JSON.stringify(backendData.todayTasks || [])
-            );
-            localStorage.setItem(
-              "currentBooks",
-              JSON.stringify(backendData.books || [])
-            );
-            if (backendData.todayTasksLastReset) {
-              localStorage.setItem(
-                "todayTasksLastReset",
-                backendData.todayTasksLastReset
-              );
-            }
-          } else {
-            // No backend data, load from localStorage
-            loadFromLocalStorage();
-          }
-        } catch (error) {
-          console.error(
-            "Failed to load from backend, using localStorage:",
-            error
-          );
-          loadFromLocalStorage();
-        }
-      } else {
-        // User not logged in, load from localStorage only
-        loadFromLocalStorage();
-      }
-
+      // Load data from localStorage only
+      loadFromLocalStorage();
       setLoading(false);
     };
 
@@ -1053,6 +968,9 @@ export default function App() {
       let storedRoadmap = null;
       let storedTodayTasks = null;
       let storedTodayDailyTasks = null;
+      let storedBooks = null;
+      let storedQuoteIndex = null;
+
       try {
         const roadmapString = localStorage.getItem("roadmap");
         if (roadmapString && roadmapString !== "null") {
@@ -1066,39 +984,61 @@ export default function App() {
         if (todayDailyTasksString) {
           storedTodayDailyTasks = JSON.parse(todayDailyTasksString);
         }
-      } catch {
+        const booksString = localStorage.getItem("books");
+        if (booksString) {
+          storedBooks = JSON.parse(booksString);
+        }
+        const quoteIndexString = localStorage.getItem("quoteIndex");
+        if (quoteIndexString) {
+          storedQuoteIndex = parseInt(quoteIndexString, 10);
+        }
+      } catch (error) {
+        console.error("Failed to parse localStorage data:", error);
         storedRoadmap = null;
         storedTodayTasks = null;
         storedTodayDailyTasks = null;
+        storedBooks = null;
+        storedQuoteIndex = null;
       }
 
       if (storedRoadmap) {
         setRoadmap(storedRoadmap);
       } else {
-        // No demo data - start with null roadmap
         setRoadmap(null);
       }
 
       if (storedTodayTasks) {
         setTodayTasks(storedTodayTasks);
       } else {
-        // No demo data - start with empty array
         setTodayTasks([]);
       }
 
       if (storedTodayDailyTasks) {
         setTodayDailyTasks(storedTodayDailyTasks);
       } else {
-        // No demo data - start with empty array
         setTodayDailyTasks([]);
+      }
+
+      if (storedBooks) {
+        setBooks(storedBooks);
+      } else {
+        setBooks(getInitialBooks());
+      }
+
+      if (storedQuoteIndex !== null) {
+        setQuoteIndex(storedQuoteIndex);
+      } else {
+        setQuoteIndex(0);
       }
 
       // Load today's progress data
       setTodayProgress(getTodayProgress());
+
+      console.log("✅ Data loaded from localStorage");
     };
 
     loadData();
-  }, [isAuthenticated, authLoading, getUserData]);
+  }, []); // Only run once on component mount
 
   // Refresh today's progress when analytics section is active or when progress is updated
   useEffect(() => {
@@ -1124,342 +1064,37 @@ export default function App() {
     }
   }, [activeSection]);
 
-  // Listen for real-time Firebase updates
+  // Auto-save to localStorage when data changes
   useEffect(() => {
-    const handleFirebaseUpdate = (event) => {
-      const data = event.detail;
-      console.log("📱 Updating app state from real-time Firebase data:", data);
+    if (loading) return;
 
-      // Set the ref to prevent sync loops
-      isUpdatingFromFirebaseRef.current = true;
-
-      if (data.roadmap !== undefined) {
-        setRoadmap(data.roadmap);
-        localStorage.setItem("roadmap", JSON.stringify(data.roadmap));
-      }
-
-      if (data.todayTasks !== undefined) {
-        setTodayTasks(data.todayTasks);
-        localStorage.setItem("todayTasks", JSON.stringify(data.todayTasks));
-      }
-
-      if (data.books !== undefined) {
-        setBooks(data.books);
-        localStorage.setItem("currentBooks", JSON.stringify(data.books));
-      }
-
-      // For authenticated users, don't store todayTasksLastReset in localStorage
-      // It should only be stored in Firebase to avoid conflicts
-      if (data.todayTasksLastReset) {
-        console.log(
-          "📅 Reset date from Firebase update:",
-          data.todayTasksLastReset
-        );
-        // No localStorage storage for authenticated users to prevent conflicts
-      }
-
-      // Sync user preferences
-      if (data.userPreferences) {
-        if (data.userPreferences.quoteIndex !== undefined) {
-          setQuoteIndex(data.userPreferences.quoteIndex);
-          localStorage.setItem(
-            "quoteIndex",
-            data.userPreferences.quoteIndex.toString()
-          );
-        }
-      }
-
-      // Clear the flag after a delay to prevent rapid updates
-      setTimeout(() => {
-        isUpdatingFromFirebaseRef.current = false;
-      }, 500);
-    };
-
-    window.addEventListener("firebaseDataUpdate", handleFirebaseUpdate);
-
-    // Throttle Firebase sync to prevent rapid consecutive calls
-    const throttledSync = () => {
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-      syncTimeoutRef.current = setTimeout(() => {
-        if (isAuthenticated && syncUserData && !isSyncing) {
-          try {
-            // Get current data and sync
-            const roadmapData = JSON.parse(
-              localStorage.getItem("roadmap") || "null"
-            );
-            const todayTasksData = JSON.parse(
-              localStorage.getItem("todayTasks") || "[]"
-            );
-            const booksData = JSON.parse(localStorage.getItem("books") || "[]");
-            const quoteIndex = localStorage.getItem("quoteIndex");
-
-            syncUserData({
-              roadmap: roadmapData,
-              todayTasks: todayTasksData,
-              books: booksData,
-              userPreferences: {
-                quoteIndex: quoteIndex ? parseInt(quoteIndex, 10) : 0,
-              },
-            });
-          } catch (error) {
-            console.warn("Global Firebase sync failed:", error);
-          }
-        }
-      }, 5000); // Throttle to max 1 sync per 5 seconds
-    };
-
-    // Expose throttled sync function for Pomodoro stats
-    window.syncToFirebase = throttledSync;
-
-    return () => {
-      window.removeEventListener("firebaseDataUpdate", handleFirebaseUpdate);
-      // Clean up timeout and global function
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-      if (window.syncToFirebase) {
-        delete window.syncToFirebase;
-      }
-    };
-  }, [isAuthenticated, isSyncing, syncUserData]); // Handle daily progress updates separately
-  useEffect(() => {
-    const handleDailyProgressUpdate = async (event) => {
-      if (
-        !isAuthenticated ||
-        isUpdatingFromFirebaseRef.current ||
-        isUserAddingDataRef.current ||
-        isSyncing
-      )
-        return;
-
-      const { date, progress } = event.detail;
-      console.log("📊 Syncing daily progress to Firebase:", { date, progress });
-
+    // Debounce localStorage saves to prevent too many writes
+    const timeoutId = setTimeout(() => {
       try {
-        // Get current reset date from Firebase - preserve existing value
-        let todayTasksLastReset = getDateString();
-        const userData = await getUserData();
-        todayTasksLastReset = userData?.todayTasksLastReset || getDateString();
-
-        await syncUserData({
-          roadmap: roadmap || null,
-          todayTasks: todayTasks || [],
-          todayDailyTasks: todayDailyTasks || [],
-          books: books || [],
-          todayTasksLastReset, // Preserve existing reset date
-          dailyProgress: {
-            [date]: progress,
-          },
-        });
-      } catch (err) {
-        console.error("Failed to sync daily progress:", err);
-      }
-    };
-
-    window.addEventListener("dailyProgressUpdate", handleDailyProgressUpdate);
-
-    return () => {
-      window.removeEventListener(
-        "dailyProgressUpdate",
-        handleDailyProgressUpdate
-      );
-    };
-  }, [
-    isAuthenticated,
-    isSyncing,
-    roadmap,
-    todayTasks,
-    todayDailyTasks,
-    books,
-    syncUserData,
-    getUserData,
-  ]);
-
-  useEffect(() => {
-    if (
-      loading ||
-      authLoading ||
-      isUpdatingFromFirebaseRef.current ||
-      isUserAddingDataRef.current ||
-      isSyncing
-    )
-      return;
-
-    // Debounce Firebase sync to prevent too many writes
-    const timeoutId = setTimeout(async () => {
-      try {
-        // Always save to localStorage as backup
         localStorage.setItem("roadmap", JSON.stringify(roadmap));
         localStorage.setItem("todayTasks", JSON.stringify(todayTasks));
         saveBooksToStorage(books);
-
-        // If authenticated, also sync to backend
-        if (isAuthenticated) {
-          // Preserve existing reset date from Firebase
-          let todayTasksLastReset = getDateString();
-          try {
-            const userData = await getUserData();
-            todayTasksLastReset =
-              userData?.todayTasksLastReset || getDateString();
-          } catch (error) {
-            console.error("Error getting reset date for sync:", error);
-            // Keep current date as fallback
-          }
-
-          // Include user preferences like quoteIndex
-          const quoteIndex = localStorage.getItem("quoteIndex");
-
-          console.log(
-            "💾 Syncing all data to Firebase (preserving reset date)..."
-          );
-          syncUserData({
-            roadmap: roadmap || null,
-            todayTasks: todayTasks || [],
-            todayDailyTasks: todayDailyTasks || [],
-            books: books || [],
-            todayTasksLastReset, // Preserve existing reset date
-            userPreferences: {
-              quoteIndex: quoteIndex ? parseInt(quoteIndex, 10) : 0,
-            },
-          });
-        }
+        localStorage.setItem(
+          "todayDailyTasks",
+          JSON.stringify(todayDailyTasks)
+        );
+        localStorage.setItem("quoteIndex", quoteIndex.toString());
+        console.log("💾 Data auto-saved to localStorage");
       } catch (e) {
-        console.error("Failed to save data:", e);
+        console.error("Failed to save data to localStorage:", e);
       }
-    }, 800); // Reduced debounce to 800ms for faster sync
+    }, 500); // Debounce to 500ms
 
     return () => clearTimeout(timeoutId);
-  }, [
-    roadmap,
-    todayTasks,
-    todayDailyTasks,
-    books,
-    quoteIndex,
-    loading,
-    authLoading,
-    isAuthenticated,
-    isSyncing,
-    syncUserData,
-    getUserData,
-  ]);
+  }, [roadmap, todayTasks, todayDailyTasks, books, quoteIndex, loading]);
 
-  // --- Daily Reset Logic (Firebase-only, no localStorage conflicts) ---
-  useEffect(() => {
-    let resetInProgress = false;
-
-    const doResetIfNeeded = async () => {
-      // Skip if reset already in progress or conditions not met
-      if (
-        resetInProgress ||
-        !isAuthenticated ||
-        loading ||
-        authLoading ||
-        isUpdatingFromFirebaseRef.current
-      ) {
-        return;
-      }
-
-      try {
-        resetInProgress = true;
-        const today = getDateString();
-        const userData = await getUserData();
-        const lastReset = userData?.todayTasksLastReset;
-
-        if (lastReset !== today) {
-          console.log("🔄 Starting daily reset for tasks...");
-
-          // Block Firebase updates to prevent conflicts
-          isUpdatingFromFirebaseRef.current = true;
-
-          // Get current tasks snapshot
-          const currentTasks = [...todayTasks];
-
-          // Keep uncompleted tasks
-          const uncompletedTasks = currentTasks.filter((t) => !t.completed);
-
-          // Reset daily and recurring tasks that were completed
-          const completedRecurringTasks = currentTasks
-            .filter(
-              (t) =>
-                t.completed &&
-                (t.isDaily ||
-                  t.repeatType === "daily" ||
-                  shouldShowTaskToday(t))
-            )
-            .map((t) => ({ ...t, completed: false }));
-
-          const resetTasks = [...uncompletedTasks, ...completedRecurringTasks];
-
-          // Reset daily progress
-          saveTodayProgress(0, 0);
-
-          // Reset Pomodoro statistics for new day
-          resetDailyPomodoroStats();
-
-          // Note: Track Progress tasks are now persistent and won't reset daily
-
-          // Update state first
-          setTodayTasks(resetTasks);
-
-          // Sync to Firebase immediately with all data
-          await syncUserData({
-            roadmap: roadmap || null,
-            todayTasks: resetTasks,
-            todayDailyTasks: todayDailyTasks, // Keep existing tasks without reset
-            books: books || [],
-            todayTasksLastReset: today,
-            userPreferences: {
-              quoteIndex: parseInt(
-                localStorage.getItem("quoteIndex") || "0",
-                10
-              ),
-            },
-          });
-
-          console.log("✅ Daily reset completed and synced to Firebase");
-        }
-      } catch (error) {
-        console.error("❌ Daily reset failed:", error);
-      } finally {
-        resetInProgress = false;
-        // Re-enable Firebase updates after a delay
-        setTimeout(() => {
-          isUpdatingFromFirebaseRef.current = false;
-        }, 1000);
-      }
-    };
-
-    // Initial reset check after a brief delay to ensure everything is loaded
-    const initialTimeout = setTimeout(doResetIfNeeded, 1000);
-
-    // Check for reset every hour
-    const intervalId = setInterval(doResetIfNeeded, 1000 * 60 * 60);
-
-    return () => {
-      clearTimeout(initialTimeout);
-      clearInterval(intervalId);
-    };
-  }, [
-    isAuthenticated,
-    loading,
-    authLoading,
-    getUserData,
-    syncUserData,
-    roadmap,
-    books,
-    todayTasks,
-    todayDailyTasks,
-  ]);
-
-  // --- Daily Reset Logic for Non-Authenticated Users (localStorage-based) ---
+  // --- Daily Reset Logic for localStorage-only App ---
   useEffect(() => {
     let resetInProgress = false;
 
     const doLocalStorageResetIfNeeded = () => {
-      // Skip if reset already in progress or user is authenticated
-      if (resetInProgress || isAuthenticated || loading || authLoading) {
+      // Skip if reset already in progress
+      if (resetInProgress || loading) {
         return;
       }
 
@@ -1469,7 +1104,7 @@ export default function App() {
         const lastReset = localStorage.getItem("todayTasksLastReset") || "";
 
         if (lastReset !== today) {
-          console.log("🔄 Starting daily reset for non-authenticated user...");
+          console.log("🔄 Starting daily reset for localStorage-only app...");
 
           // Get current tasks snapshot
           const currentTasks = [...todayTasks];
@@ -1507,13 +1142,10 @@ export default function App() {
           localStorage.setItem("todayTasks", JSON.stringify(resetTasks));
           localStorage.setItem("todayTasksLastReset", today);
 
-          console.log("✅ Daily reset completed for non-authenticated user");
+          console.log("✅ Daily reset completed for localStorage-only app");
         }
       } catch (error) {
-        console.error(
-          "❌ Daily reset failed for non-authenticated user:",
-          error
-        );
+        console.error("❌ Daily reset failed:", error);
       } finally {
         resetInProgress = false;
       }
@@ -1529,64 +1161,9 @@ export default function App() {
       clearTimeout(initialTimeout);
       clearInterval(intervalId);
     };
-  }, [isAuthenticated, loading, authLoading]);
+  }, [loading]); // Only depend on loading since no auth needed
 
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
-
-  // Force immediate sync function
-  const forceSyncToFirebase = async (
-    updatedRoadmap = roadmap,
-    updatedTodayTasks = todayTasks,
-    updatedBooks = books,
-    updatedTodayDailyTasks = todayDailyTasks
-  ) => {
-    try {
-      // Always save to localStorage first as backup
-      localStorage.setItem("roadmap", JSON.stringify(updatedRoadmap || null));
-      localStorage.setItem(
-        "todayTasks",
-        JSON.stringify(updatedTodayTasks || [])
-      );
-      saveBooksToStorage(updatedBooks || []);
-
-      if (!isAuthenticated) {
-        console.log("💾 Saved to localStorage (not authenticated)");
-        return;
-      }
-
-      // Preserve existing reset date from Firebase
-      let todayTasksLastReset = getDateString();
-      try {
-        const userData = await getUserData();
-        todayTasksLastReset = userData?.todayTasksLastReset || getDateString();
-      } catch (err) {
-        console.error("Error getting reset date for force sync:", err);
-        // Keep current date as fallback
-      }
-
-      const quoteIndex = localStorage.getItem("quoteIndex");
-
-      console.log(
-        "🚀 Force syncing data to Firebase (preserving reset date)..."
-      );
-      await syncUserData({
-        roadmap: updatedRoadmap || null,
-        todayTasks: updatedTodayTasks || [],
-        todayDailyTasks: updatedTodayDailyTasks || [],
-        books: updatedBooks || [],
-        todayTasksLastReset, // Preserve existing reset date
-        userPreferences: {
-          quoteIndex: quoteIndex ? parseInt(quoteIndex, 10) : 0,
-        },
-      });
-      console.log("✅ Force sync completed successfully");
-    } catch (error) {
-      console.error(
-        "❌ Force sync failed, but data is saved to localStorage:",
-        error
-      );
-    }
-  };
 
   const handleMasterAddTime = (taskNameToAdd, hours, minutes) => {
     console.log("🎯 handleMasterAddTime called:", {
@@ -1637,10 +1214,10 @@ export default function App() {
     setRoadmap(newRoadmap);
     setMasterAddTimeModalOpen(false);
 
-    // Allow syncing after a shorter delay and force sync with updated roadmap
-    setTimeout(async () => {
+    // Save to localStorage immediately
+    setTimeout(() => {
       isUserAddingDataRef.current = false;
-      await forceSyncToFirebase(newRoadmap, todayTasks, books);
+      localStorage.setItem("roadmap", JSON.stringify(newRoadmap));
     }, 300);
   };
 
@@ -1686,10 +1263,10 @@ export default function App() {
     setRoadmap(newRoadmap);
     setMasterAddTimeModalOpen(false);
 
-    // Allow syncing after a shorter delay and force sync with updated roadmap
-    setTimeout(async () => {
+    // Save to localStorage immediately
+    setTimeout(() => {
       isUserAddingDataRef.current = false;
-      await forceSyncToFirebase(newRoadmap, todayTasks, books);
+      localStorage.setItem("roadmap", JSON.stringify(newRoadmap));
     }, 300);
   };
 
@@ -2263,9 +1840,7 @@ export default function App() {
     };
 
     setRoadmap(updatedRoadmap);
-    if (isAuthenticated) {
-      syncUserData({ roadmap: updatedRoadmap });
-    }
+    // Data will be auto-saved to localStorage via useEffect
 
     setWeeklyProgressModalOpen(false);
     setSelectedWeeklyTask(null);
@@ -3617,15 +3192,11 @@ function MasterAddTimeModal({
   );
 }
 
-// Modern ProfileMenu with avatar and dropdown
+// Modern ProfileMenu with avatar and dropdown (localStorage-only version)
 function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
   const [open, setOpen] = useState(false);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
-
-  const { user, logout, isAuthenticated } = useAuth();
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -3640,16 +3211,6 @@ function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
-
-  const handleLogout = () => {
-    logout();
-    setOpen(false);
-  };
-
-  const handleLoginClick = () => {
-    setOpen(false);
-    setLoginModalOpen(true);
-  };
 
   return (
     <>
@@ -3679,59 +3240,39 @@ function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
               />
               <div>
                 <div className="font-semibold text-gray-900 text-base">
-                  {isAuthenticated ? user?.name || "User" : "Guest"}
+                  Local User
                 </div>
-                <div className="text-xs text-gray-500">
-                  {isAuthenticated ? "Authenticated" : "Not logged in"}
-                </div>
+                <div className="text-xs text-gray-500">Data stored locally</div>
               </div>
             </div>
 
-            {isAuthenticated ? (
-              <>
-                <button
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenStats();
-                  }}
-                  className="w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm"
-                >
-                  Statistics
-                </button>
-                <button
-                  onClick={() => {
-                    onImport();
-                    setOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm"
-                >
-                  Import Data
-                </button>
-                <button
-                  onClick={() => {
-                    onExport();
-                    setOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm"
-                >
-                  Export Data
-                </button>
-                <div className="border-t border-gray-100 my-2"></div>
-                <button
-                  onClick={handleLogout}
-                  className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleLoginClick}
-                className="w-full text-left px-3 py-2 text-indigo-600 hover:bg-indigo-50 rounded-md text-sm font-medium"
-              >
-                Login to sync data
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setOpen(false);
+                onOpenStats();
+              }}
+              className="w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm"
+            >
+              Statistics
+            </button>
+            <button
+              onClick={() => {
+                onImport();
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm"
+            >
+              Import Data
+            </button>
+            <button
+              onClick={() => {
+                onExport();
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm"
+            >
+              Export Data
+            </button>
 
             <div className="border-t border-gray-100 my-2"></div>
             <div className="flex justify-center space-x-3 mb-2">
@@ -3777,29 +3318,11 @@ function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
               </a>
             </div>
             <div className="mt-auto text-center text-gray-600 font-semibold text-xs p-1">
-              © 2025 Progress Tracker
+              © 2025 Progress Tracker (Local Storage)
             </div>
           </div>
         )}
       </div>
-
-      {/* Authentication Modals */}
-      <LoginModal
-        isOpen={loginModalOpen}
-        onClose={() => setLoginModalOpen(false)}
-        onSwitchToRegister={() => {
-          setLoginModalOpen(false);
-          setRegisterModalOpen(true);
-        }}
-      />
-      <RegisterModal
-        isOpen={registerModalOpen}
-        onClose={() => setRegisterModalOpen(false)}
-        onSwitchToLogin={() => {
-          setRegisterModalOpen(false);
-          setLoginModalOpen(true);
-        }}
-      />
     </>
   );
 }

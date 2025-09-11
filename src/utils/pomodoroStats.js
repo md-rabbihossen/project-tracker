@@ -1,22 +1,34 @@
 // Pomodoro Statistics Utility Functions
 
-// Get current date in YYYY-MM-DD format
+// Get current date in YYYY-MM-DD format (timezone-safe)
 export const getCurrentDate = () => {
-  return new Date().toISOString().split("T")[0];
+  const today = new Date();
+  // Use local timezone instead of UTC to avoid timezone issues
+  const year = today.getFullYear();
+  const month = (today.getMonth() + 1).toString().padStart(2, "0");
+  const day = today.getDate().toString().padStart(2, "0");
+  const localDate = `${year}-${month}-${day}`;
+
+  console.log(`📅 Current date (local timezone): ${localDate}`);
+  return localDate;
 };
 
-// Get current week start date (Saturday)
+// Get current week start date (Saturday) - timezone-safe
 export const getWeekStartDate = () => {
   const today = new Date();
   const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   const daysToSaturday = dayOfWeek === 6 ? 0 : (dayOfWeek + 1) % 7; // Days to go back to Saturday
   const saturday = new Date(today);
   saturday.setDate(today.getDate() - daysToSaturday);
-  const weekStart = saturday.toISOString().split("T")[0];
+
+  // Use local timezone instead of UTC
+  const year = saturday.getFullYear();
+  const month = (saturday.getMonth() + 1).toString().padStart(2, "0");
+  const day = saturday.getDate().toString().padStart(2, "0");
+  const weekStart = `${year}-${month}-${day}`;
+
   console.log(
-    `📅 Current week starts on Saturday: ${weekStart} (today is ${
-      today.toISOString().split("T")[0]
-    })`
+    `📅 Current week starts on Saturday: ${weekStart} (today is ${getCurrentDate()})`
   );
   return weekStart;
 };
@@ -147,15 +159,6 @@ export const getAllCurrentStats = () => {
 // Save stats to localStorage
 export const savePomodoroStats = (stats) => {
   localStorage.setItem("pomodoroStats", JSON.stringify(stats));
-
-  // Trigger Firebase sync if user is authenticated
-  if (window.syncToFirebase && typeof window.syncToFirebase === "function") {
-    try {
-      window.syncToFirebase();
-    } catch (error) {
-      console.warn("Firebase sync failed for Pomodoro stats:", error);
-    }
-  }
 };
 
 // Update goals
@@ -376,7 +379,21 @@ export const getPreviousDayStats = () => {
   const stats = getPomodoroStats();
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  // Use local timezone for consistency
+  const year = yesterday.getFullYear();
+  const month = (yesterday.getMonth() + 1).toString().padStart(2, "0");
+  const day = yesterday.getDate().toString().padStart(2, "0");
+  const yesterdayStr = `${year}-${month}-${day}`;
+  const todayStr = getCurrentDate();
+
+  console.log(`📊 Looking for previous day stats:`, {
+    today: todayStr,
+    yesterday: yesterdayStr,
+    availableDays: Object.keys(stats.daily),
+    yesterdayData: stats.daily[yesterdayStr],
+  });
+
   const previousDayStats = stats.daily[yesterdayStr] || {
     minutes: 0,
     sessions: 0,
@@ -388,17 +405,34 @@ export const getPreviousDayStats = () => {
     previousDayStats.labels = {};
   }
 
+  console.log(`📊 Previous day (${yesterdayStr}) stats:`, previousDayStats);
   return previousDayStats;
 };
 
 // Get previous week's stats
 export const getPreviousWeekStats = () => {
   const stats = getPomodoroStats();
-  const previousWeek = new Date();
-  previousWeek.setDate(previousWeek.getDate() - 7);
-  const previousWeekStart = getWeekStartDateFromDate(previousWeek);
+  const currentWeekStart = getWeekStartDate();
 
-  const previousWeekStats = stats.weekly[previousWeekStart] || {
+  // Get previous week start date
+  const previousWeekStart = new Date(currentWeekStart);
+  previousWeekStart.setDate(previousWeekStart.getDate() - 7);
+
+  // Use local timezone for consistency
+  const year = previousWeekStart.getFullYear();
+  const month = (previousWeekStart.getMonth() + 1).toString().padStart(2, "0");
+  const day = previousWeekStart.getDate().toString().padStart(2, "0");
+  const previousWeekKey = `${year}-${month}-${day}`;
+
+  console.log(`📊 Looking for previous week stats:`, {
+    currentWeek: currentWeekStart,
+    previousWeek: previousWeekStart.toDateString(),
+    previousWeekKey,
+    availableWeeks: Object.keys(stats.weekly),
+    previousWeekData: stats.weekly[previousWeekKey],
+  });
+
+  const previousWeekStats = stats.weekly[previousWeekKey] || {
     minutes: 0,
     sessions: 0,
     labels: {},
@@ -410,9 +444,8 @@ export const getPreviousWeekStats = () => {
   }
 
   console.log(
-    `📊 Previous week (${previousWeekStart}):`,
-    previousWeekStats.minutes,
-    "minutes"
+    `📊 Previous week (${previousWeekKey}) stats:`,
+    previousWeekStats
   );
   return previousWeekStats;
 };
@@ -592,9 +625,11 @@ export const resetDailyPomodoroStats = () => {
       `📊 Archiving Pomodoro stats for ${today}:`,
       stats.daily[today]
     );
+    // Data is already saved in stats.daily[today] - no need to move it
+    // The getPreviousDayStats function will retrieve it correctly
   }
 
-  // Reset today's stats to zero
+  // Important: Only reset today's stats to zero, keep all other days intact
   stats.daily[today] = { minutes: 0, sessions: 0, labels: {} };
 
   // Ensure weekly stats structure exists (DO NOT reset weekly stats)

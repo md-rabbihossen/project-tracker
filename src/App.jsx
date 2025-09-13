@@ -1312,6 +1312,48 @@ export default function App() {
       (week) => calculateWeekProgress(week) < 100
     );
 
+    // Check if user is trying to distribute across more weeks than available
+    if (weeksToSpan > visibleWeeks.length) {
+      const confirmed = window.confirm(
+        `⚠️ Warning: You're trying to distribute this task across ${weeksToSpan} weeks, but only ${visibleWeeks.length} weeks are available in your current plan.\n\n` +
+          `Click "OK" to distribute across the maximum available weeks (${visibleWeeks.length}), or "Cancel" to go back and adjust your input.`
+      );
+
+      if (!confirmed) {
+        // User cancelled, don't close modal so they can adjust
+        return;
+      }
+
+      // User confirmed, adjust to maximum available weeks
+      taskData.numWeeks = visibleWeeks.length.toString();
+      const adjustedWeeksToSpan = visibleWeeks.length;
+
+      // Continue with the adjusted number of weeks
+      return handleAddSpanningTaskWithValidation(
+        taskData,
+        adjustedWeeksToSpan,
+        newRoadmap,
+        visibleWeeks
+      );
+    }
+
+    // Normal flow if weeks are within limits
+    return handleAddSpanningTaskWithValidation(
+      taskData,
+      weeksToSpan,
+      newRoadmap,
+      visibleWeeks
+    );
+  };
+
+  const handleAddSpanningTaskWithValidation = (
+    taskData,
+    weeksToSpan,
+    newRoadmap,
+    visibleWeeks
+  ) => {
+    const { type, name } = taskData;
+
     if (type === "time") {
       const totalMinutes =
         (parseInt(taskData.hours, 10) || 0) * 60 +
@@ -1391,6 +1433,7 @@ export default function App() {
     }
 
     setRoadmap(newRoadmap);
+    setSpanningTaskModalOpen(false);
     setSpanningTaskModalOpen(false);
   };
 
@@ -1561,12 +1604,39 @@ export default function App() {
   const handleExport = () => {
     try {
       const backupData = {
+        // Home and Progress page data (existing)
         roadmap,
         todayTasks,
         books,
         todayTasksLastReset:
           localStorage.getItem("todayTasksLastReset") || getDateString(),
+
+        // Track page data (Pomodoro Timer & Analytics)
+        pomodoroStats: localStorage.getItem("pomodoroStats") || null,
+        userGoals: localStorage.getItem("userGoals") || null,
+
+        // Additional app state
+        todayDailyTasks: localStorage.getItem("todayDailyTasks") || null,
+        quoteIndex: localStorage.getItem("quoteIndex") || "0",
+        currentBooks: localStorage.getItem("currentBooks") || null,
+
+        // Daily progress data (for any date-specific progress tracking)
+        dailyProgressData: (() => {
+          const progressData = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("dailyProgress_")) {
+              progressData[key] = localStorage.getItem(key);
+            }
+          }
+          return Object.keys(progressData).length > 0 ? progressData : null;
+        })(),
+
+        // Export metadata
+        exportDate: new Date().toISOString(),
+        appVersion: "2.0",
       };
+
       const jsonString = JSON.stringify(backupData, null, 2);
       const blob = new Blob([jsonString], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -1577,6 +1647,11 @@ export default function App() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+
+      console.log(
+        "✅ Export completed with all app data:",
+        Object.keys(backupData)
+      );
     } catch (error) {
       console.error("Failed to export data:", error);
     }
@@ -1593,22 +1668,129 @@ export default function App() {
       reader.onload = (event) => {
         try {
           const importedData = JSON.parse(event.target.result);
-          // Basic validation
-          if (importedData.roadmap && importedData.todayTasks) {
-            setRoadmap(importedData.roadmap);
-            setTodayTasks(importedData.todayTasks);
-            setBooks(importedData.books || []);
+
+          console.log("📥 Imported data structure:", Object.keys(importedData));
+          console.log("📥 Full imported data:", importedData);
+
+          // More flexible validation - check if it's a valid backup file
+          const hasEssentialData =
+            importedData &&
+            typeof importedData === "object" &&
+            (importedData.roadmap !== undefined ||
+              importedData.todayTasks !== undefined ||
+              importedData.books !== undefined ||
+              importedData.pomodoroStats !== undefined);
+
+          if (hasEssentialData) {
+            console.log("✅ Valid backup file detected, importing data...");
+
+            // Import Home and Progress page data AND save to localStorage immediately
+            if (importedData.roadmap !== undefined) {
+              console.log("📊 Importing roadmap data");
+              setRoadmap(importedData.roadmap);
+              localStorage.setItem(
+                "roadmap",
+                JSON.stringify(importedData.roadmap)
+              );
+            }
+
+            if (importedData.todayTasks !== undefined) {
+              console.log("📋 Importing today tasks data");
+              setTodayTasks(importedData.todayTasks);
+              localStorage.setItem(
+                "todayTasks",
+                JSON.stringify(importedData.todayTasks)
+              );
+            }
+
+            if (importedData.books !== undefined) {
+              console.log("📚 Importing books data");
+              setBooks(importedData.books || []);
+              localStorage.setItem(
+                "books",
+                JSON.stringify(importedData.books || [])
+              );
+            }
+
+            // Import localStorage data
             if (importedData.todayTasksLastReset) {
+              console.log("📅 Importing today tasks last reset data");
               localStorage.setItem(
                 "todayTasksLastReset",
                 importedData.todayTasksLastReset
               );
             }
+
+            // Import Track page data (Pomodoro & Analytics)
+            if (importedData.pomodoroStats) {
+              console.log("🍅 Importing pomodoro stats data");
+              localStorage.setItem("pomodoroStats", importedData.pomodoroStats);
+            }
+
+            if (importedData.userGoals) {
+              console.log("🎯 Importing user goals data");
+              localStorage.setItem("userGoals", importedData.userGoals);
+            }
+
+            // Import additional app state
+            if (importedData.todayDailyTasks) {
+              console.log("📝 Importing today daily tasks data");
+              localStorage.setItem(
+                "todayDailyTasks",
+                importedData.todayDailyTasks
+              );
+            }
+
+            if (importedData.quoteIndex) {
+              console.log("💭 Importing quote index data");
+              localStorage.setItem("quoteIndex", importedData.quoteIndex);
+            }
+
+            if (importedData.currentBooks) {
+              console.log("📖 Importing current books data");
+              localStorage.setItem("currentBooks", importedData.currentBooks);
+            }
+
+            // Import daily progress data
+            if (importedData.dailyProgressData) {
+              console.log("📈 Importing daily progress data");
+              Object.entries(importedData.dailyProgressData).forEach(
+                ([key, value]) => {
+                  if (key.startsWith("dailyProgress_")) {
+                    localStorage.setItem(key, value);
+                  }
+                }
+              );
+            }
+
+            console.log("✅ Import completed successfully with all app data");
+            alert(
+              "Data imported successfully! The page will refresh to apply all changes."
+            );
+
+            // Small delay to ensure all localStorage writes are completed
+            setTimeout(() => {
+              window.location.reload();
+            }, 100);
           } else {
-            console.error("Invalid backup file format.");
+            console.error(
+              "Invalid backup file format - no recognizable data found."
+            );
+            console.error(
+              "Available keys in file:",
+              Object.keys(importedData || {})
+            );
+            alert(
+              "Invalid backup file format. This doesn't appear to be a Progress Tracker backup file.\n\nAvailable data: " +
+                Object.keys(importedData || {}).join(", ") +
+                "\n\nPlease select a valid backup file."
+            );
           }
         } catch (error) {
           console.error("Failed to parse backup file:", error);
+          alert(
+            "Failed to import data. Please check that the file is a valid JSON backup."
+          );
         }
       };
       reader.readAsText(file);
@@ -1728,11 +1910,17 @@ export default function App() {
     setEditingTodayTask(null);
   };
 
-  const handleAddTodayProgressFromModal = (progressData) => {
+  // Enhanced progress handler with overflow logic
+  const handleAddTodayProgressWithOverflow = (progressData) => {
+    console.log("🔧 Enhanced progress handler called with:", progressData);
+
     if (progressData.hours !== undefined) {
-      // Handle time-based progress
+      console.log("⏰ Processing time-based progress");
+      // Handle time-based progress with overflow
       const updatedTasks = todayDailyTasks.map((task) => {
         if (task.id === progressData.taskId) {
+          console.log("📋 Found matching task:", task);
+
           const newProgressMinutes =
             (task.progressMinutes || 0) + progressData.minutes;
           const newProgressHours =
@@ -1741,13 +1929,30 @@ export default function App() {
             Math.floor(newProgressMinutes / 60);
           const finalProgressMinutes = newProgressMinutes % 60;
 
-          // Cap progress at total
+          // Calculate total available time for this task
           const totalMinutesTotal =
             (task.totalHours || 0) * 60 + (task.totalMinutes || 0);
           const currentProgressMinutes =
             newProgressHours * 60 + finalProgressMinutes;
 
+          console.log(`📊 Progress calculation:
+            - Current: ${newProgressHours}h ${finalProgressMinutes}m (${currentProgressMinutes} total minutes)
+            - Target: ${task.totalHours || 0}h ${
+            task.totalMinutes || 0
+          }m (${totalMinutesTotal} total minutes)
+            - Overflow: ${currentProgressMinutes - totalMinutesTotal} minutes`);
+
           if (currentProgressMinutes >= totalMinutesTotal) {
+            // Calculate overflow
+            const overflowMinutes = currentProgressMinutes - totalMinutesTotal;
+
+            console.log(`🚀 Overflow detected: ${overflowMinutes} minutes`);
+
+            if (overflowMinutes > 0) {
+              // Handle overflow to next week
+              handleOverflowToNextWeek(task, overflowMinutes);
+            }
+
             return {
               ...task,
               progressHours: task.totalHours || 0,
@@ -1766,42 +1971,281 @@ export default function App() {
 
       updateTodayDailyTasks(updatedTasks);
     } else if (progressData.days !== undefined) {
-      // Handle day-based progress
-      const updatedTasks = todayDailyTasks.map((task) =>
-        task.id === progressData.taskId
-          ? {
-              ...task,
-              progress: Math.min(
-                (task.progress || 0) + progressData.days,
-                task.total || 0
-              ),
-            }
-          : task
-      );
+      // Handle day-based progress with overflow
+      const updatedTasks = todayDailyTasks.map((task) => {
+        if (task.id === progressData.taskId) {
+          const newProgress = (task.progress || 0) + progressData.days;
+          const totalDays = task.total || 0;
 
-      updateTodayDailyTasks(updatedTasks);
-    } else {
-      // Handle page-based progress
-      const updatedTasks = todayDailyTasks.map((task) =>
-        task.id === progressData.taskId
-          ? {
-              ...task,
-              progress: Math.min(
-                (task.progress || 0) + progressData.pages,
-                task.total || 0
-              ),
+          if (newProgress >= totalDays) {
+            // Calculate overflow days
+            const overflowDays = newProgress - totalDays;
+
+            if (overflowDays > 0) {
+              // Handle overflow to next week for day-based tasks
+              handleOverflowToNextWeek(task, overflowDays, "days");
             }
-          : task
-      );
+
+            return {
+              ...task,
+              progress: totalDays,
+            };
+          }
+
+          return {
+            ...task,
+            progress: newProgress,
+          };
+        }
+        return task;
+      });
 
       updateTodayDailyTasks(updatedTasks);
     }
+
+    // Update progress statistics
+    console.log("📊 Updating daily progress statistics");
+    const hoursAdded = progressData.hours || progressData.days / 24 || 0;
+    addToTodayProgress("hours", hoursAdded);
+  };
+
+  // Function to handle overflow to next week
+  const handleOverflowToNextWeek = (
+    currentTask,
+    overflowAmount,
+    progressType = "time"
+  ) => {
+    console.log(`⏭️ Starting overflow process:
+      - Task: ${currentTask.name}
+      - Overflow: ${overflowAmount} ${
+      progressType === "time" ? "minutes" : "days"
+    }
+      - Type: ${progressType}`);
+
+    const newRoadmap = deepClone(roadmap);
+    const currentWeek = getCurrentWeekNumber(new Date());
+
+    console.log(`📅 Current week: ${currentWeek}`);
+
+    // Find next week
+    const nextWeekNumber = currentWeek + 1;
+    let nextWeek = newRoadmap.phases[0].weeks.find(
+      (w) => w.week === nextWeekNumber
+    );
+
+    console.log(`🔍 Looking for week ${nextWeekNumber}, found:`, nextWeek);
+
+    // If next week doesn't exist, create it
+    if (!nextWeek) {
+      console.log(`✨ Creating new week ${nextWeekNumber}`);
+      nextWeek = {
+        week: nextWeekNumber,
+        topics: [],
+        weekGoal: "Continue progress",
+        keyTakeaways: [],
+      };
+      newRoadmap.phases[0].weeks.push(nextWeek);
+    }
+
+    // Look for existing similar task in next week
+    let existingTask = nextWeek.topics.find(
+      (topic) =>
+        topic.text === currentTask.name.replace(" (Daily)", "") &&
+        topic.type === currentTask.type
+    );
+
+    if (progressType === "time") {
+      // Handle time-based overflow
+      const overflowHours = Math.floor(overflowAmount / 60);
+      const overflowMinutes = overflowAmount % 60;
+
+      if (existingTask) {
+        // Add to existing task
+        existingTask.completedMinutes =
+          (existingTask.completedMinutes || 0) + overflowAmount;
+      } else {
+        // Create new task in next week with overflow as initial progress
+        const taskName = currentTask.name.replace(" (Daily)", "");
+        nextWeek.topics.push({
+          text: taskName,
+          totalMinutes:
+            (currentTask.totalHours || 0) * 60 +
+            (currentTask.totalMinutes || 0),
+          completedMinutes: overflowAmount,
+          id: `overflow-${Date.now()}`,
+          type: currentTask.type,
+        });
+
+        // Also add to daily tasks for next week (when it becomes current)
+        // This will be handled by the daily reset logic
+      }
+
+      console.log(
+        `⏭️ Overflow: Added ${overflowHours}h ${overflowMinutes}m of "${currentTask.name}" to week ${nextWeekNumber}`
+      );
+    } else if (progressType === "days") {
+      // Handle day-based overflow
+      if (existingTask) {
+        existingTask.progress = (existingTask.progress || 0) + overflowAmount;
+      } else {
+        const taskName = currentTask.name.replace(" (Daily)", "");
+        nextWeek.topics.push({
+          text: taskName,
+          total: currentTask.total || 0,
+          progress: overflowAmount,
+          id: `overflow-${Date.now()}`,
+          type: currentTask.type,
+        });
+      }
+
+      console.log(
+        `⏭️ Overflow: Added ${overflowAmount} days of "${currentTask.name}" to week ${nextWeekNumber}`
+      );
+    }
+
+    // Update roadmap with overflow
+    setRoadmap(newRoadmap);
+
+    // Show notification about overflow
+    const taskName = currentTask.name.replace(" (Daily)", "");
+    const overflowText =
+      progressType === "time"
+        ? `${Math.floor(overflowAmount / 60)}h ${overflowAmount % 60}m`
+        : `${overflowAmount} days`;
+
+    alert(
+      `✨ Great progress! You completed this week's target for "${taskName}".\n\n${overflowText} has been automatically added to next week (Week ${nextWeekNumber}).`
+    );
+  };
+
+  // Function to handle overflow for weekly tasks in Progress page
+  const handleWeeklyOverflowToNextWeek = (
+    currentTask,
+    currentWeekNumber,
+    overflowAmount,
+    progressType
+  ) => {
+    console.log(`⏭️ Starting weekly overflow process:
+      - Task: ${currentTask.text}
+      - Current week: ${currentWeekNumber}
+      - Overflow: ${overflowAmount} ${progressType}
+      - Type: ${progressType}`);
+
+    const nextWeekNumber = currentWeekNumber + 1;
+
+    // Get the current roadmap state
+    setRoadmap((currentRoadmap) => {
+      const newRoadmap = deepClone(currentRoadmap);
+
+      // Find next week
+      let nextWeek = newRoadmap.phases[0].weeks.find(
+        (w) => w.week === nextWeekNumber
+      );
+
+      console.log(`🔍 Looking for week ${nextWeekNumber}, found:`, nextWeek);
+
+      // If next week doesn't exist, create it
+      if (!nextWeek) {
+        console.log(`✨ Creating new week ${nextWeekNumber}`);
+        nextWeek = {
+          week: nextWeekNumber,
+          topics: [],
+          weekGoal: "Continue progress",
+          keyTakeaways: [],
+        };
+        newRoadmap.phases[0].weeks.push(nextWeek);
+        // Sort weeks by week number
+        newRoadmap.phases[0].weeks.sort((a, b) => a.week - b.week);
+      }
+
+      // Look for existing similar task in next week
+      let existingTask = nextWeek.topics.find(
+        (topic) =>
+          topic.text === currentTask.text && topic.type === currentTask.type
+      );
+
+      if (existingTask) {
+        console.log(`🔄 Found existing task in next week, adding overflow`);
+        // Add to existing task
+        if (progressType === "minutes") {
+          existingTask.completedMinutes =
+            (existingTask.completedMinutes || 0) + overflowAmount;
+        } else if (progressType === "pages") {
+          existingTask.completedPages =
+            (existingTask.completedPages || 0) + overflowAmount;
+        } else if (progressType === "days") {
+          existingTask.completedDays =
+            (existingTask.completedDays || 0) + overflowAmount;
+        }
+      } else {
+        console.log(`✨ Creating new task in next week with overflow`);
+        // Create new task in next week with overflow as initial progress
+        const newTask = {
+          text: currentTask.text,
+          id: `overflow-${Date.now()}`,
+          type: currentTask.type,
+        };
+
+        if (progressType === "minutes") {
+          newTask.totalMinutes = currentTask.totalMinutes || 0;
+          newTask.completedMinutes = overflowAmount;
+        } else if (progressType === "pages") {
+          newTask.totalPages = currentTask.totalPages || 0;
+          newTask.completedPages = overflowAmount;
+        } else if (progressType === "days") {
+          newTask.totalDays = currentTask.totalDays || 0;
+          newTask.completedDays = overflowAmount;
+        }
+
+        nextWeek.topics.push(newTask);
+      }
+
+      console.log("📝 Updated roadmap with overflow:", newRoadmap);
+      console.log("📝 Next week after overflow:", nextWeek);
+
+      // Force localStorage update
+      setTimeout(() => {
+        localStorage.setItem("roadmap", JSON.stringify(newRoadmap));
+        console.log("💾 Roadmap saved to localStorage");
+      }, 100);
+
+      return newRoadmap;
+    });
+
+    // Show notification about overflow
+    let overflowText;
+    if (progressType === "minutes") {
+      const hours = Math.floor(overflowAmount / 60);
+      const minutes = overflowAmount % 60;
+      overflowText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    } else if (progressType === "pages") {
+      overflowText = `${overflowAmount} pages`;
+    } else if (progressType === "days") {
+      overflowText = `${overflowAmount} days`;
+    }
+
+    setTimeout(() => {
+      alert(
+        `✨ Excellent work! You completed this week's target for "${currentTask.text}".\n\n${overflowText} has been automatically added to Week ${nextWeekNumber}.`
+      );
+    }, 500);
+  };
+
+  const handleAddTodayProgressFromModal = (progressData) => {
+    console.log("🎯 Main progress handler called with:", progressData);
+    // Use the enhanced handler with overflow logic
+    handleAddTodayProgressWithOverflow(progressData);
 
     setAddTodayProgressModalOpen(false);
     setSelectedTodayTask(null);
   };
 
   const handleWeeklyProgressFromModal = (progressData) => {
+    console.log("🔧 Weekly progress handler called with:", progressData);
+
+    let overflowDetected = false;
+    let overflowData = null;
+
     const updatedRoadmap = {
       ...roadmap,
       phases: roadmap.phases.map((phase) => ({
@@ -1810,29 +2254,119 @@ export default function App() {
           ...weekData,
           topics: weekData.topics.map((topic) => {
             if (topic.id === progressData.taskId) {
+              console.log("📋 Found matching weekly task:", topic);
+
               if (topic.type === "book") {
+                const newCompletedPages =
+                  (topic.completedPages || 0) + progressData.pages;
+                const totalPages = topic.totalPages || 0;
+
+                console.log(
+                  `📚 Book progress: ${newCompletedPages}/${totalPages} pages`
+                );
+
+                if (newCompletedPages >= totalPages) {
+                  const overflowPages = newCompletedPages - totalPages;
+                  console.log(
+                    `🚀 Book overflow detected: ${overflowPages} pages`
+                  );
+
+                  if (overflowPages > 0) {
+                    overflowDetected = true;
+                    overflowData = {
+                      topic,
+                      weekNumber: weekData.week,
+                      overflow: overflowPages,
+                      type: "pages",
+                    };
+                  }
+
+                  return {
+                    ...topic,
+                    completedPages: totalPages,
+                  };
+                }
+
                 return {
                   ...topic,
-                  completedPages: Math.min(
-                    (topic.completedPages || 0) + progressData.pages,
-                    topic.totalPages || 0
-                  ),
+                  completedPages: newCompletedPages,
                 };
               } else if (topic.type === "day") {
+                const newCompletedDays =
+                  (topic.completedDays || 0) + progressData.days;
+                const totalDays = topic.totalDays || 0;
+
+                console.log(
+                  `📅 Day challenge progress: ${newCompletedDays}/${totalDays} days`
+                );
+
+                if (newCompletedDays >= totalDays) {
+                  const overflowDays = newCompletedDays - totalDays;
+                  console.log(
+                    `🚀 Day challenge overflow detected: ${overflowDays} days`
+                  );
+
+                  if (overflowDays > 0) {
+                    overflowDetected = true;
+                    overflowData = {
+                      topic,
+                      weekNumber: weekData.week,
+                      overflow: overflowDays,
+                      type: "days",
+                    };
+                  }
+
+                  return {
+                    ...topic,
+                    completedDays: totalDays,
+                  };
+                }
+
                 return {
                   ...topic,
-                  completedDays: Math.min(
-                    (topic.completedDays || 0) + progressData.days,
-                    topic.totalDays || 0
-                  ),
+                  completedDays: newCompletedDays,
                 };
               } else {
+                // Course type - time-based
+                const newCompletedMinutes =
+                  (topic.completedMinutes || 0) + progressData.minutes;
+                const totalMinutes = topic.totalMinutes || 0;
+
+                console.log(
+                  `⏰ Course progress: ${Math.floor(
+                    newCompletedMinutes / 60
+                  )}h ${newCompletedMinutes % 60}m / ${Math.floor(
+                    totalMinutes / 60
+                  )}h ${totalMinutes % 60}m`
+                );
+
+                if (newCompletedMinutes >= totalMinutes) {
+                  const overflowMinutes = newCompletedMinutes - totalMinutes;
+                  console.log(
+                    `🚀 Course overflow detected: ${Math.floor(
+                      overflowMinutes / 60
+                    )}h ${overflowMinutes % 60}m`
+                  );
+
+                  if (overflowMinutes > 0) {
+                    overflowDetected = true;
+                    overflowData = {
+                      topic,
+                      weekNumber: weekData.week,
+                      overflow: overflowMinutes,
+                      type: "minutes",
+                    };
+                  }
+
+                  return {
+                    ...topic,
+                    completedMinutes: totalMinutes,
+                  };
+                }
+
                 return {
                   ...topic,
-                  completedMinutes: Math.min(
-                    (topic.completedMinutes || 0) + progressData.minutes,
-                    topic.totalMinutes || 0
-                  ),
+                  completedMinutes: newCompletedMinutes,
                 };
               }
             }
@@ -1842,8 +2376,23 @@ export default function App() {
       })),
     };
 
+    // First update the current week's progress
+    console.log("📝 Setting roadmap with current week progress...");
     setRoadmap(updatedRoadmap);
-    // Data will be auto-saved to localStorage via useEffect
+
+    // Then handle overflow if detected
+    if (overflowDetected && overflowData) {
+      console.log("⏭️ Processing overflow...");
+      // Use setTimeout to ensure the first roadmap update completes
+      setTimeout(() => {
+        handleWeeklyOverflowToNextWeek(
+          overflowData.topic,
+          overflowData.weekNumber,
+          overflowData.overflow,
+          overflowData.type
+        );
+      }, 200);
+    }
 
     setWeeklyProgressModalOpen(false);
     setSelectedWeeklyTask(null);

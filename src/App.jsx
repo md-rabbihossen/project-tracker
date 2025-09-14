@@ -4,6 +4,8 @@ import Logo from "./assets/logo.png";
 import Profile from "./assets/profile.jpg";
 import {
   addPomodoroTime,
+  checkAndResetMonthlyStats,
+  checkAndResetWeeklyStats,
   resetDailyPomodoroStats,
 } from "./utils/pomodoroStats";
 
@@ -953,20 +955,29 @@ export default function App() {
     setShowPomodoroTimer(true);
   };
 
-  useEffect(() => {
-    setQuoteIndex((prev) => {
-      const next = (prev + 1) % quotes.length;
-      localStorage.setItem("quoteIndex", next);
-      return next;
-    });
-  }, []);
-
   const handleNextQuote = () => {
     setQuoteIndex((prev) => {
       const next = (prev + 1) % quotes.length;
       localStorage.setItem("quoteIndex", next);
       return next;
     });
+  };
+
+  // Helper function to update todayDailyTasks with localStorage support
+  const updateTodayDailyTasks = (updatedTasks) => {
+    setTodayDailyTasks(updatedTasks);
+
+    // Save to localStorage for non-authenticated users
+    if (!isAuthenticated) {
+      localStorage.setItem("todayDailyTasks", JSON.stringify(updatedTasks));
+    }
+
+    // Sync to Firebase for authenticated users
+    if (isAuthenticated) {
+      syncUserData({
+        todayDailyTasks: updatedTasks,
+      });
+    }
   };
 
   useEffect(() => {
@@ -1041,6 +1052,7 @@ export default function App() {
     const loadFromLocalStorage = () => {
       let storedRoadmap = null;
       let storedTodayTasks = null;
+      let storedTodayDailyTasks = null;
       try {
         const roadmapString = localStorage.getItem("roadmap");
         if (roadmapString && roadmapString !== "null") {
@@ -1050,9 +1062,14 @@ export default function App() {
         if (todayTasksString) {
           storedTodayTasks = JSON.parse(todayTasksString);
         }
+        const todayDailyTasksString = localStorage.getItem("todayDailyTasks");
+        if (todayDailyTasksString) {
+          storedTodayDailyTasks = JSON.parse(todayDailyTasksString);
+        }
       } catch {
         storedRoadmap = null;
         storedTodayTasks = null;
+        storedTodayDailyTasks = null;
       }
 
       if (storedRoadmap) {
@@ -1067,6 +1084,13 @@ export default function App() {
       } else {
         // No demo data - start with empty array
         setTodayTasks([]);
+      }
+
+      if (storedTodayDailyTasks) {
+        setTodayDailyTasks(storedTodayDailyTasks);
+      } else {
+        // No demo data - start with empty array
+        setTodayDailyTasks([]);
       }
 
       // Load today's progress data
@@ -1429,6 +1453,84 @@ export default function App() {
     todayDailyTasks,
   ]);
 
+  // --- Daily Reset Logic for Non-Authenticated Users (localStorage-based) ---
+  useEffect(() => {
+    let resetInProgress = false;
+
+    const doLocalStorageResetIfNeeded = () => {
+      // Skip if reset already in progress or user is authenticated
+      if (resetInProgress || isAuthenticated || loading || authLoading) {
+        return;
+      }
+
+      try {
+        resetInProgress = true;
+        const today = getDateString();
+        const lastReset = localStorage.getItem("todayTasksLastReset") || "";
+
+        if (lastReset !== today) {
+          console.log("🔄 Starting daily reset for non-authenticated user...");
+
+          // Get current tasks snapshot
+          const currentTasks = [...todayTasks];
+
+          // Keep uncompleted tasks
+          const uncompletedTasks = currentTasks.filter((t) => !t.completed);
+
+          // Reset daily and recurring tasks that were completed
+          const completedRecurringTasks = currentTasks
+            .filter(
+              (t) =>
+                t.completed &&
+                (t.isDaily ||
+                  t.repeatType === "daily" ||
+                  shouldShowTaskToday(t))
+            )
+            .map((t) => ({ ...t, completed: false }));
+
+          const resetTasks = [...uncompletedTasks, ...completedRecurringTasks];
+
+          // Reset daily progress
+          saveTodayProgress(0, 0);
+
+          // Reset daily analytics stats (but keep lifetime stats)
+          resetDailyPomodoroStats();
+
+          // Ensure weekly and monthly stats are properly initialized for new periods
+          checkAndResetWeeklyStats();
+          checkAndResetMonthlyStats();
+
+          // Update state for today's tasks
+          setTodayTasks(resetTasks);
+
+          // Save to localStorage
+          localStorage.setItem("todayTasks", JSON.stringify(resetTasks));
+          localStorage.setItem("todayTasksLastReset", today);
+
+          console.log("✅ Daily reset completed for non-authenticated user");
+        }
+      } catch (error) {
+        console.error(
+          "❌ Daily reset failed for non-authenticated user:",
+          error
+        );
+      } finally {
+        resetInProgress = false;
+      }
+    };
+
+    // Initial reset check after a brief delay to ensure everything is loaded
+    const initialTimeout = setTimeout(doLocalStorageResetIfNeeded, 1000);
+
+    // Check for reset every hour
+    const intervalId = setInterval(doLocalStorageResetIfNeeded, 1000 * 60 * 60);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(intervalId);
+    };
+  }, [isAuthenticated, loading, authLoading]);
+
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
   // Force immediate sync function
@@ -1749,13 +1851,7 @@ export default function App() {
         };
 
         const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
-        setTodayDailyTasks(updatedTodayTasks);
-
-        if (isAuthenticated) {
-          syncUserData({
-            todayDailyTasks: updatedTodayTasks,
-          });
-        }
+        updateTodayDailyTasks(updatedTodayTasks);
       } else if (taskData.type === "book") {
         const totalPages = parseInt(taskData.pages, 10) || 0;
         week.topics.push({
@@ -1777,13 +1873,7 @@ export default function App() {
         };
 
         const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
-        setTodayDailyTasks(updatedTodayTasks);
-
-        if (isAuthenticated) {
-          syncUserData({
-            todayDailyTasks: updatedTodayTasks,
-          });
-        }
+        updateTodayDailyTasks(updatedTodayTasks);
       } else if (taskData.type === "day") {
         const totalDays = parseInt(taskData.days, 10) || 0;
         week.topics.push({
@@ -1805,13 +1895,7 @@ export default function App() {
         };
 
         const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
-        setTodayDailyTasks(updatedTodayTasks);
-
-        if (isAuthenticated) {
-          syncUserData({
-            todayDailyTasks: updatedTodayTasks,
-          });
-        }
+        updateTodayDailyTasks(updatedTodayTasks);
       }
     }
     setRoadmap(newRoadmap);
@@ -2046,11 +2130,7 @@ export default function App() {
       const updatedTasks = todayDailyTasks.map((task) =>
         task.id === editingTodayTask.id ? { ...task, ...taskData } : task
       );
-      setTodayDailyTasks(updatedTasks);
-
-      if (isAuthenticated) {
-        syncUserData({ todayDailyTasks: updatedTasks });
-      }
+      updateTodayDailyTasks(updatedTasks);
     } else {
       // Add new task
       const newTask = {
@@ -2061,11 +2141,7 @@ export default function App() {
           : { progress: 0 }),
       };
       const updatedTasks = [...todayDailyTasks, newTask];
-      setTodayDailyTasks(updatedTasks);
-
-      if (isAuthenticated) {
-        syncUserData({ todayDailyTasks: updatedTasks });
-      }
+      updateTodayDailyTasks(updatedTasks);
     }
 
     setAddTodayTaskModalOpen(false);
@@ -2108,10 +2184,7 @@ export default function App() {
         return task;
       });
 
-      setTodayDailyTasks(updatedTasks);
-      if (isAuthenticated) {
-        syncUserData({ todayDailyTasks: updatedTasks });
-      }
+      updateTodayDailyTasks(updatedTasks);
     } else if (progressData.days !== undefined) {
       // Handle day-based progress
       const updatedTasks = todayDailyTasks.map((task) =>
@@ -2126,10 +2199,7 @@ export default function App() {
           : task
       );
 
-      setTodayDailyTasks(updatedTasks);
-      if (isAuthenticated) {
-        syncUserData({ todayDailyTasks: updatedTasks });
-      }
+      updateTodayDailyTasks(updatedTasks);
     } else {
       // Handle page-based progress
       const updatedTasks = todayDailyTasks.map((task) =>
@@ -2144,10 +2214,7 @@ export default function App() {
           : task
       );
 
-      setTodayDailyTasks(updatedTasks);
-      if (isAuthenticated) {
-        syncUserData({ todayDailyTasks: updatedTasks });
-      }
+      updateTodayDailyTasks(updatedTasks);
     }
 
     setAddTodayProgressModalOpen(false);
@@ -2206,11 +2273,7 @@ export default function App() {
 
   const handleDeleteTodayDailyTask = (taskId) => {
     const updatedTasks = todayDailyTasks.filter((task) => task.id !== taskId);
-    setTodayDailyTasks(updatedTasks);
-
-    if (isAuthenticated) {
-      syncUserData({ todayDailyTasks: updatedTasks });
-    }
+    updateTodayDailyTasks(updatedTasks);
   };
 
   const handleResetTodayDailyTask = (taskId) => {
@@ -2224,11 +2287,7 @@ export default function App() {
       }
       return task;
     });
-    setTodayDailyTasks(updatedTasks);
-
-    if (isAuthenticated) {
-      syncUserData({ todayDailyTasks: updatedTasks });
-    }
+    updateTodayDailyTasks(updatedTasks);
   };
 
   // --- Today Section UI ---

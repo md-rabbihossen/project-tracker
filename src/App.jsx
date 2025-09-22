@@ -18,6 +18,7 @@ import {
   CheckCircleIcon,
   ChevronDownIcon,
   ClockIcon,
+  DragHandleIcon,
   HomeIcon,
   PencilIcon,
   PlusCircleIcon,
@@ -809,6 +810,10 @@ export default function App() {
   const [spanningTaskModalOpen, setSpanningTaskModalOpen] = useState(false);
   const [addWeeksModalOpen, setAddWeeksModalOpen] = useState(false);
   const [statsModalOpen, setStatsModalOpen] = useState(false);
+
+  // Drag and drop state for Track page
+  const [draggedTaskId, setDraggedTaskId] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   const [newWeeklyTaskModal, setNewWeeklyTaskModal] = useState({
     isOpen: false,
@@ -1970,6 +1975,47 @@ export default function App() {
       });
 
       updateTodayDailyTasks(updatedTasks);
+    } else if (progressData.pages !== undefined) {
+      // Handle page-based progress with overflow
+      console.log("📚 Processing page-based progress");
+      const updatedTasks = todayDailyTasks.map((task) => {
+        if (task.id === progressData.taskId) {
+          console.log("📋 Found matching book task:", task);
+
+          const newProgress = (task.progress || 0) + progressData.pages;
+          const totalPages = task.total || 0;
+
+          console.log(`📊 Book progress calculation:
+            - Current: ${newProgress} pages
+            - Target: ${totalPages} pages
+            - Overflow: ${newProgress - totalPages} pages`);
+
+          if (newProgress >= totalPages) {
+            // Calculate overflow pages
+            const overflowPages = newProgress - totalPages;
+
+            console.log(`🚀 Book overflow detected: ${overflowPages} pages`);
+
+            if (overflowPages > 0) {
+              // Handle overflow to next week for page-based tasks
+              handleOverflowToNextWeek(task, overflowPages, "pages");
+            }
+
+            return {
+              ...task,
+              progress: totalPages,
+            };
+          }
+
+          return {
+            ...task,
+            progress: newProgress,
+          };
+        }
+        return task;
+      });
+
+      updateTodayDailyTasks(updatedTasks);
     } else if (progressData.days !== undefined) {
       // Handle day-based progress with overflow
       const updatedTasks = todayDailyTasks.map((task) => {
@@ -2005,8 +2051,16 @@ export default function App() {
 
     // Update progress statistics
     console.log("📊 Updating daily progress statistics");
-    const hoursAdded = progressData.hours || progressData.days / 24 || 0;
-    addToTodayProgress("hours", hoursAdded);
+    if (progressData.hours !== undefined) {
+      const hoursAdded = progressData.hours || 0;
+      addToTodayProgress("hours", hoursAdded);
+    } else if (progressData.pages !== undefined) {
+      const pagesAdded = progressData.pages || 0;
+      addToTodayProgress("pages", pagesAdded);
+    } else if (progressData.days !== undefined) {
+      const daysAdded = progressData.days || 0;
+      addToTodayProgress("days", daysAdded);
+    }
   };
 
   // Function to handle overflow to next week
@@ -2417,6 +2471,90 @@ export default function App() {
     updateTodayDailyTasks(updatedTasks);
   };
 
+  // --- Drag and Drop Handlers for Track Page ---
+  const handleDragStart = (e, taskId) => {
+    console.log("🔄 Drag started for task:", taskId);
+    setDraggedTaskId(taskId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", taskId);
+  };
+
+  const handleDragEnd = (e) => {
+    console.log("🔄 Drag ended");
+    setDraggedTaskId(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Always allow drop and set drag over index, don't depend on state
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(index);
+  };
+
+  const handleDragEnter = (e, index) => {
+    e.preventDefault();
+    // Always set drag over index, don't depend on state  
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    // Only clear if we're leaving the entire list item
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Get dragged task ID from dataTransfer first, fallback to state
+    let draggedId = e.dataTransfer.getData('text/plain');
+    if (!draggedId) {
+      draggedId = draggedTaskId;
+    }
+    
+    console.log("🎯 Drop at index:", dropIndex, "dragged task:", draggedId);
+
+    if (!draggedId) {
+      console.log("❌ No dragged task");
+      setDragOverIndex(null);
+      return;
+    }
+
+    const draggedIndex = todayDailyTasks.findIndex(
+      (task) => task.id === draggedId
+    );
+    console.log("📍 Dragged index:", draggedIndex, "Drop index:", dropIndex);
+
+    if (draggedIndex === -1 || draggedIndex === dropIndex) {
+      console.log("❌ Invalid indices or same position");
+      setDragOverIndex(null);
+      return;
+    }
+
+    // Create new array with reordered tasks
+    const newTasks = [...todayDailyTasks];
+    const draggedTask = newTasks[draggedIndex];
+
+    // Remove dragged task from original position
+    newTasks.splice(draggedIndex, 1);
+
+    // Insert at new position
+    newTasks.splice(dropIndex, 0, draggedTask);
+
+    console.log(
+      "✅ Reordered tasks:",
+      newTasks.map((t) => t.name)
+    );
+    updateTodayDailyTasks(newTasks);
+    setDraggedTaskId(null);
+    setDragOverIndex(null);
+  };
+
   // --- Today Section UI ---
   const TodaySection = () => {
     // Calculate overall progress for today's tasks
@@ -2496,7 +2634,7 @@ export default function App() {
                 </div>
               ) : (
                 <ul className="space-y-4 mt-4">
-                  {todayDailyTasks.map((task) => {
+                  {todayDailyTasks.map((task, index) => {
                     let percent = 0;
                     let progressDisplay = "";
                     let totalDisplay = "";
@@ -2553,11 +2691,31 @@ export default function App() {
                     return (
                       <li
                         key={task.id}
-                        className="bg-gray-50 rounded-lg p-4 flex flex-col gap-2 shadow-sm border border-gray-100 group"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, task.id)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDragEnter={(e) => handleDragEnter(e, index)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, index)}
+                        className={`bg-gray-50 rounded-lg p-4 flex flex-col gap-2 shadow-sm border border-gray-100 group cursor-move transition-all duration-200 ${
+                          dragOverIndex === index
+                            ? "border-indigo-400 bg-indigo-50 shadow-md"
+                            : ""
+                        } ${
+                          draggedTaskId === task.id
+                            ? "opacity-50 shadow-lg"
+                            : ""
+                        }`}
                       >
                         <div className="flex justify-between items-center">
-                          <div className="font-semibold text-gray-800 text-lg">
-                            {task.name}
+                          <div className="flex items-center gap-3">
+                            <div className="text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing">
+                              <DragHandleIcon className="w-5 h-5" />
+                            </div>
+                            <div className="font-semibold text-gray-800 text-lg">
+                              {task.name}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -4340,8 +4498,12 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
   const [type, setType] = useState("course");
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
+  const [currentHours, setCurrentHours] = useState("");
+  const [currentMinutes, setCurrentMinutes] = useState("");
   const [pages, setPages] = useState("");
+  const [currentPages, setCurrentPages] = useState("");
   const [days, setDays] = useState("");
+  const [currentDays, setCurrentDays] = useState("");
 
   useEffect(() => {
     if (editingTask) {
@@ -4350,26 +4512,42 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
       if (editingTask.type === "course") {
         setHours((editingTask.totalHours || 0).toString());
         setMinutes((editingTask.totalMinutes || 0).toString());
+        setCurrentHours((editingTask.progressHours || 0).toString());
+        setCurrentMinutes((editingTask.progressMinutes || 0).toString());
         setPages("");
+        setCurrentPages("");
         setDays("");
+        setCurrentDays("");
       } else if (editingTask.type === "book") {
         setHours("");
         setMinutes("");
+        setCurrentHours("");
+        setCurrentMinutes("");
         setPages((editingTask.total || 0).toString());
+        setCurrentPages((editingTask.progress || 0).toString());
         setDays("");
+        setCurrentDays("");
       } else if (editingTask.type === "day") {
         setHours("");
         setMinutes("");
+        setCurrentHours("");
+        setCurrentMinutes("");
         setPages("");
+        setCurrentPages("");
         setDays((editingTask.total || 0).toString());
+        setCurrentDays((editingTask.progress || 0).toString());
       }
     } else {
       setName("");
       setType("course");
       setHours("");
       setMinutes("");
+      setCurrentHours("");
+      setCurrentMinutes("");
       setPages("");
+      setCurrentPages("");
       setDays("");
+      setCurrentDays("");
     }
   }, [editingTask, isOpen]);
 
@@ -4380,6 +4558,8 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
     if (type === "course") {
       const h = parseInt(hours) || 0;
       const m = parseInt(minutes) || 0;
+      const ch = parseInt(currentHours) || 0;
+      const cm = parseInt(currentMinutes) || 0;
       if (h === 0 && m === 0) return;
 
       // Convert minutes > 59 to hours and remaining minutes
@@ -4387,29 +4567,55 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
       const finalHours = Math.floor(totalMinutes / 60);
       const finalMinutes = totalMinutes % 60;
 
+      // Convert current minutes > 59 to hours and remaining minutes
+      const currentTotalMinutes = ch * 60 + cm;
+      const finalCurrentHours = Math.floor(currentTotalMinutes / 60);
+      const finalCurrentMinutes = currentTotalMinutes % 60;
+
+      // Ensure current time doesn't exceed total time
+      const maxCurrentMinutes = finalHours * 60 + finalMinutes;
+      const validCurrentMinutes = Math.min(
+        currentTotalMinutes,
+        maxCurrentMinutes
+      );
+      const validCurrentHours = Math.floor(validCurrentMinutes / 60);
+      const validCurrentMinutesRemainder = validCurrentMinutes % 60;
+
       taskData = {
         name: name.trim(),
         type: type,
         totalHours: finalHours,
         totalMinutes: finalMinutes,
+        progressHours: validCurrentHours,
+        progressMinutes: validCurrentMinutesRemainder,
       };
     } else if (type === "book") {
       const p = parseInt(pages) || 0;
+      const cp = parseInt(currentPages) || 0;
       if (p <= 0) return;
+
+      // Ensure current pages doesn't exceed total pages
+      const validCurrentPages = Math.min(cp, p);
 
       taskData = {
         name: name.trim(),
         type: type,
         total: p,
+        progress: validCurrentPages,
       };
     } else if (type === "day") {
       const d = parseInt(days) || 0;
+      const cd = parseInt(currentDays) || 0;
       if (d <= 0) return;
+
+      // Ensure current days doesn't exceed total days
+      const validCurrentDays = Math.min(cd, d);
 
       taskData = {
         name: name.trim(),
         type: type,
         total: d,
+        progress: validCurrentDays,
       };
     }
 
@@ -4419,8 +4625,12 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
       setType("course");
       setHours("");
       setMinutes("");
+      setCurrentHours("");
+      setCurrentMinutes("");
       setPages("");
+      setCurrentPages("");
       setDays("");
+      setCurrentDays("");
     }
   };
 
@@ -4465,60 +4675,123 @@ function AddTodayTaskModal({ isOpen, onClose, onSave, editingTask }) {
             </select>
           </div>
           {type === "course" ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Total Time
-              </label>
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <input
-                    type="number"
-                    value={hours}
-                    onChange={(e) => setHours(e.target.value)}
-                    placeholder="Hours"
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-                    min="0"
-                  />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Total Time
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      value={hours}
+                      onChange={(e) => setHours(e.target.value)}
+                      placeholder="Hours"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                      min="0"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      value={minutes}
+                      onChange={(e) => setMinutes(e.target.value)}
+                      placeholder="Minutes"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                      min="0"
+                    />
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <input
-                    type="number"
-                    value={minutes}
-                    onChange={(e) => setMinutes(e.target.value)}
-                    placeholder="Minutes"
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-                    min="0"
-                  />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Time Completed
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      value={currentHours}
+                      onChange={(e) => setCurrentHours(e.target.value)}
+                      placeholder="Hours"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                      min="0"
+                      max={hours || undefined}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="number"
+                      value={currentMinutes}
+                      onChange={(e) => setCurrentMinutes(e.target.value)}
+                      placeholder="Minutes"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                      min="0"
+                      max="59"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
           ) : type === "book" ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Total Pages
-              </label>
-              <input
-                type="number"
-                value={pages}
-                onChange={(e) => setPages(e.target.value)}
-                placeholder="Number of pages"
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-                min="1"
-              />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Total Pages
+                </label>
+                <input
+                  type="number"
+                  value={pages}
+                  onChange={(e) => setPages(e.target.value)}
+                  placeholder="Number of pages"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                  min="1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Pages Read
+                </label>
+                <input
+                  type="number"
+                  value={currentPages}
+                  onChange={(e) => setCurrentPages(e.target.value)}
+                  placeholder="Pages already read"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                  min="0"
+                  max={pages || undefined}
+                />
+              </div>
             </div>
           ) : type === "day" ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Total Days
-              </label>
-              <input
-                type="number"
-                value={days}
-                onChange={(e) => setDays(e.target.value)}
-                placeholder="e.g., 50 for 50-day challenge"
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-                min="1"
-              />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Total Days
+                </label>
+                <input
+                  type="number"
+                  value={days}
+                  onChange={(e) => setDays(e.target.value)}
+                  placeholder="e.g., 50 for 50-day challenge"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                  min="1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Days Completed
+                </label>
+                <input
+                  type="number"
+                  value={currentDays}
+                  onChange={(e) => setCurrentDays(e.target.value)}
+                  placeholder="Days already completed"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
+                  min="0"
+                  max={days || undefined}
+                />
+              </div>
             </div>
           ) : null}
         </div>

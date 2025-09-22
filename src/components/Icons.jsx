@@ -206,3 +206,19 @@ export const ArrowPathIcon = ({ className }) => (
     />
   </svg>
 );
+
+export const DragHandleIcon = ({ className }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="1.5"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M8 12h.01M12 12h.01M16 12h.01M8 8h.01M12 8h.01M16 8h.01M8 16h.01M12 16h.01M16 16h.01"
+    />
+  </svg>
+);

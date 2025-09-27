@@ -13,7 +13,7 @@ export const AddTimeModal = ({
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [selectedLabel, setSelectedLabel] = useState(
-    availableLabels[0] || "study"
+    availableLabels.includes("programming") ? "programming" : (availableLabels[0] || "study")
   );
   const [newLabel, setNewLabel] = useState("");
   const [showAddLabel, setShowAddLabel] = useState(false);
@@ -43,7 +43,7 @@ export const AddTimeModal = ({
     // Reset form
     setHours("");
     setMinutes("");
-    setSelectedLabel(availableLabels[0] || "study");
+    setSelectedLabel(availableLabels.includes("programming") ? "programming" : (availableLabels[0] || "study"));
     onClose();
   };
 
@@ -68,7 +68,7 @@ export const AddTimeModal = ({
   const resetForm = () => {
     setHours("");
     setMinutes("");
-    setSelectedLabel(availableLabels[0] || "study");
+    setSelectedLabel(availableLabels.includes("programming") ? "programming" : (availableLabels[0] || "study"));
     setNewLabel("");
     setShowAddLabel(false);
   };
@@ -134,19 +134,6 @@ export const AddTimeModal = ({
             </button>
           </div>
 
-          {/* Label Dropdown */}
-          <select
-            value={selectedLabel}
-            onChange={(e) => setSelectedLabel(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
-          >
-            {availableLabels.map((label) => (
-              <option key={label} value={label}>
-                {label.charAt(0).toUpperCase() + label.slice(1)}
-              </option>
-            ))}
-          </select>
-
           {/* Add New Label */}
           {showAddLabel && (
             <div className="flex gap-2 mt-2">
@@ -178,30 +165,39 @@ export const AddTimeModal = ({
             </div>
           )}
 
-          {/* Existing Labels */}
+          {/* Current Categories (Clickable) */}
           <div className="space-y-2">
-            <p className="text-sm text-gray-600">Current categories:</p>
+            <p className="text-sm text-gray-600">Select a category:</p>
             <div className="flex flex-wrap gap-2">
               {availableLabels.map((label) => (
-                <div
+                <button
                   key={label}
-                  className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
+                  type="button"
+                  onClick={() => setSelectedLabel(label)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors ${
                     selectedLabel === label
-                      ? "bg-indigo-100 text-indigo-700 border-2 border-indigo-300"
-                      : "bg-gray-100 text-gray-700"
+                      ? "bg-indigo-600 text-white border-2 border-indigo-600"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent"
                   }`}
                 >
                   <span>{label.charAt(0).toUpperCase() + label.slice(1)}</span>
                   {availableLabels.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => handleRemoveLabel(label)}
-                      className="ml-1 text-red-500 hover:text-red-700 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveLabel(label);
+                      }}
+                      className={`ml-1 transition-colors ${
+                        selectedLabel === label
+                          ? "text-white hover:text-red-200"
+                          : "text-red-500 hover:text-red-700"
+                      }`}
                     >
                       <Trash2 size={12} />
                     </button>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           </div>

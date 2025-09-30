@@ -657,3 +657,84 @@ export const resetPomodoroStats = () => {
   localStorage.removeItem("pomodoroStats");
   return initializePomodoroStats();
 };
+
+// Custom Time Presets Management
+const PRESET_STORAGE_KEY = "pomodoroTimePresets";
+
+// Get custom time presets from localStorage
+export const getCustomTimePresets = () => {
+  const stored = localStorage.getItem(PRESET_STORAGE_KEY);
+  if (stored) {
+    try {
+      const presets = JSON.parse(stored);
+      // Ensure we always have the default presets
+      const defaultPresets = [
+        { minutes: 25, emoji: "🍅", label: "25min" },
+        { minutes: 30, emoji: "⭐", label: "30min" }, // New default
+        { minutes: 45, emoji: "📚", label: "45min" },
+        { minutes: 90, emoji: "🎯", label: "90min" },
+      ];
+
+      // Merge with stored presets, avoiding duplicates
+      const mergedPresets = [...defaultPresets];
+      presets.forEach((preset) => {
+        if (!defaultPresets.some((dp) => dp.minutes === preset.minutes)) {
+          mergedPresets.push(preset);
+        }
+      });
+
+      return mergedPresets;
+    } catch (error) {
+      console.error("Error parsing custom time presets:", error);
+    }
+  }
+
+  // Return default presets if no stored data
+  return [
+    { minutes: 25, emoji: "🍅", label: "25min" },
+    { minutes: 30, emoji: "⭐", label: "30min" }, // New default
+    { minutes: 45, emoji: "📚", label: "45min" },
+    { minutes: 90, emoji: "🎯", label: "90min" },
+  ];
+};
+
+// Save custom time presets to localStorage
+export const saveCustomTimePresets = (presets) => {
+  localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets));
+};
+
+// Add new custom time preset
+export const addCustomTimePreset = (minutes, emoji = "⏰", label = null) => {
+  const presets = getCustomTimePresets();
+  const displayLabel = label || `${minutes}min`;
+
+  // Check if preset already exists
+  if (presets.some((preset) => preset.minutes === minutes)) {
+    return presets; // Don't add duplicate
+  }
+
+  const newPreset = {
+    minutes: parseInt(minutes),
+    emoji: emoji,
+    label: displayLabel,
+    isCustom: true, // Mark as custom so it can be removed
+  };
+
+  const updatedPresets = [...presets, newPreset];
+  saveCustomTimePresets(updatedPresets);
+  return updatedPresets;
+};
+
+// Remove custom time preset
+export const removeCustomTimePreset = (minutes) => {
+  const presets = getCustomTimePresets();
+  const defaultMinutes = [25, 30, 45, 90]; // Don't allow removing defaults
+
+  if (defaultMinutes.includes(parseInt(minutes))) {
+    return presets; // Don't remove default presets
+  }
+
+  const updatedPresets = presets.filter((preset) => preset.minutes !== minutes);
+  saveCustomTimePresets(updatedPresets);
+  return updatedPresets;
+};

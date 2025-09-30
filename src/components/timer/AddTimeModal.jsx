@@ -13,7 +13,9 @@ export const AddTimeModal = ({
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [selectedLabel, setSelectedLabel] = useState(
-    availableLabels.includes("programming") ? "programming" : (availableLabels[0] || "study")
+    availableLabels.includes("programming")
+      ? "programming"
+      : availableLabels[0] || "study"
   );
   const [newLabel, setNewLabel] = useState("");
   const [showAddLabel, setShowAddLabel] = useState(false);
@@ -43,7 +45,11 @@ export const AddTimeModal = ({
     // Reset form
     setHours("");
     setMinutes("");
-    setSelectedLabel(availableLabels.includes("programming") ? "programming" : (availableLabels[0] || "study"));
+    setSelectedLabel(
+      availableLabels.includes("programming")
+        ? "programming"
+        : availableLabels[0] || "study"
+    );
     onClose();
   };
 
@@ -68,7 +74,11 @@ export const AddTimeModal = ({
   const resetForm = () => {
     setHours("");
     setMinutes("");
-    setSelectedLabel(availableLabels.includes("programming") ? "programming" : (availableLabels[0] || "study"));
+    setSelectedLabel(
+      availableLabels.includes("programming")
+        ? "programming"
+        : availableLabels[0] || "study"
+    );
     setNewLabel("");
     setShowAddLabel(false);
   };

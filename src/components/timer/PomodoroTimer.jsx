@@ -1,5 +1,15 @@
+import { Check, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addPomodoroTime, getAvailableLabels } from "../../utils/pomodoroStats";
+import {
+  addCustomTimePreset,
+  addLabel,
+  addPomodoroTime,
+  getAvailableLabels,
+  getCustomTimePresets,
+  getTodayStats,
+  removeCustomTimePreset,
+  removeLabel,
+} from "../../utils/pomodoroStats";
 
 const TIMER_STATES = {
   WORK: "work",
@@ -16,19 +26,26 @@ export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
   );
   const [sessionsCompleted] = useState(0);
   const [settings, setSettings] = useState({
-    workTime: 25,
+    workTime: 30, // Changed default from 25 to 30
     shortBreak: 5,
     longBreak: 15,
     sessionsUntilLongBreak: 4,
   });
-  const [customTime, setCustomTime] = useState(25);
+  const [customTime, setCustomTime] = useState(30);
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [selectedLabel, setSelectedLabel] = useState("study");
+  const [selectedLabel, setSelectedLabel] = useState("programming"); // Default to "programming"
   const [availableLabels, setAvailableLabels] = useState([
     "study",
     "programming",
     "other",
   ]);
+  const [newLabel, setNewLabel] = useState("");
+  const [showAddLabel, setShowAddLabel] = useState(false);
+  const [timePresets, setTimePresets] = useState([]);
+  const [showAddPreset, setShowAddPreset] = useState(false);
+  const [newPresetTime, setNewPresetTime] = useState("");
+  const [newPresetEmoji, setNewPresetEmoji] = useState("⏰");
+  const [todayStats, setTodayStats] = useState({ minutes: 0 });
 
   const audioRef = useRef(null);
   const initialTimeRef = useRef(0);
@@ -42,12 +59,31 @@ export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
     }
   }, [initialState]);
 
-  // Load available labels on mount
+  // Load available labels and time presets on mount
   useEffect(() => {
     const labels = getAvailableLabels();
     setAvailableLabels(labels);
-    setSelectedLabel(labels[0] || "study");
-  }, []);
+    // Default to "programming" if available, otherwise first label
+    setSelectedLabel(
+      labels.includes("programming")
+        ? "programming"
+        : labels[0] || "programming"
+    );
+
+    // Load custom time presets
+    const presets = getCustomTimePresets();
+    setTimePresets(presets);
+
+    // Load today's stats
+    const stats = getTodayStats();
+    setTodayStats(stats);
+
+    // Set 30 minutes as default if component is initializing
+    if (initialState?.timeLeft === 25 * 60 || !initialState?.timeLeft) {
+      setTimeLeft(30 * 60);
+      setSettings((prev) => ({ ...prev, workTime: 30 }));
+    }
+  }, [initialState?.timeLeft]);
 
   // Notify parent of state changes only when user initiates them, not during sync
   const notifyParent = useCallback(
@@ -78,6 +114,7 @@ export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
       timeLeft,
       currentState,
       totalTime: timeLeft, // Use timeLeft as totalTime since it reflects custom time
+      selectedLabel, // Include selected category for proper tracking
     };
     console.log("📡 Notifying parent with state:", newState);
     notifyParent(newState);
@@ -93,6 +130,7 @@ export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
       timeLeft,
       currentState,
       totalTime,
+      selectedLabel, // Include selected category
     });
   };
 
@@ -105,6 +143,10 @@ export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
     // Only track if more than 1 minute has elapsed
     if (elapsedMinutes >= 1 && isRunning) {
       addPomodoroTime(elapsedMinutes, selectedLabel);
+
+      // Update today's stats
+      const updatedStats = getTodayStats();
+      setTodayStats(updatedStats);
 
       // Show brief feedback about tracked time
       if (window.showToast && typeof window.showToast === "function") {
@@ -127,6 +169,7 @@ export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
       timeLeft: settings.workTime * 60,
       currentState: TIMER_STATES.WORK,
       totalTime: settings.workTime * 60,
+      selectedLabel, // Include selected category
     });
   };
 
@@ -156,6 +199,42 @@ export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
   const handleCustomTimeSubmit = (e) => {
     e.preventDefault();
     setCustomWorkTime(customTime);
+  };
+
+  const handleAddLabel = () => {
+    if (newLabel.trim()) {
+      const updatedLabels = addLabel(newLabel.trim());
+      setAvailableLabels(updatedLabels);
+      setSelectedLabel(newLabel.trim().toLowerCase());
+      setNewLabel("");
+      setShowAddLabel(false);
+    }
+  };
+
+  const handleRemoveLabel = (label) => {
+    if (availableLabels.length > 1) {
+      const updatedLabels = removeLabel(label);
+      setAvailableLabels(updatedLabels);
+      if (selectedLabel === label && updatedLabels.length > 0) {
+        setSelectedLabel(updatedLabels[0]);
+      }
+    }
+  };
+
+  const handleAddCustomPreset = () => {
+    const minutes = parseInt(newPresetTime);
+    if (minutes && minutes >= 1 && minutes <= 480) {
+      const updatedPresets = addCustomTimePreset(minutes, newPresetEmoji);
+      setTimePresets(updatedPresets);
+      setNewPresetTime("");
+      setNewPresetEmoji("⏰");
+      setShowAddPreset(false);
+    }
+  };
+
+  const handleRemoveCustomPreset = (minutes) => {
+    const updatedPresets = removeCustomTimePreset(minutes);
+    setTimePresets(updatedPresets);
   };
 
   const formatTime = (seconds) => {
@@ -275,80 +354,203 @@ export const PomodoroTimer = ({ onTimerStateChange, initialState }) => {
           </button>
         </div>
 
-        {/* Session Counter */}
+        {/* Today's Study Time */}
         <div className="flex justify-center items-center gap-2 mb-4">
-          <span className="text-sm text-gray-600">Sessions completed:</span>
-          <div className="flex gap-1">
-            {Array.from({ length: settings.sessionsUntilLongBreak }, (_, i) => (
-              <div
-                key={i}
-                className={`w-3 h-3 rounded-full ${
-                  i < sessionsCompleted % settings.sessionsUntilLongBreak
-                    ? "bg-red-500"
-                    : "bg-gray-300"
-                }`}
-              />
-            ))}
+          <span className="text-sm text-gray-600">Today's Study Time:</span>
+          <div className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">
+            <span className="text-sm font-semibold">
+              {Math.floor((todayStats.minutes || 0) / 60)}h{" "}
+              {(todayStats.minutes || 0) % 60}m
+            </span>
           </div>
         </div>
 
         {/* Quick Settings */}
         <div className="border-t pt-4 space-y-4">
           {/* Label Selection */}
-          <div className="text-center">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">
-              Study Category
-            </h4>
-            <select
-              value={selectedLabel}
-              onChange={(e) => setSelectedLabel(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-sm"
-            >
-              {availableLabels.map((label) => (
-                <option key={label} value={label}>
-                  {label.charAt(0).toUpperCase() + label.slice(1)}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Time will be tracked under this category
-            </p>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-gray-700">
+                Study Category
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowAddLabel(!showAddLabel)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+              >
+                <Plus size={14} />
+                Add New
+              </button>
+            </div>
+
+            {/* Add New Label */}
+            {showAddLabel && (
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="text"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  placeholder="Enter new category name"
+                  className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-xs"
+                  onKeyPress={(e) => e.key === "Enter" && handleAddLabel()}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddLabel}
+                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddLabel(false);
+                    setNewLabel("");
+                  }}
+                  className="px-3 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {/* Current Categories (Clickable) */}
+            <div className="space-y-2">
+              <p className="text-xs text-gray-600">Select a category:</p>
+              <div className="flex flex-wrap gap-2">
+                {availableLabels.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setSelectedLabel(label)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                      selectedLabel === label
+                        ? "bg-indigo-600 text-white border-2 border-indigo-600"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent"
+                    }`}
+                  >
+                    <span>
+                      {label.charAt(0).toUpperCase() + label.slice(1)}
+                    </span>
+                    {availableLabels.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveLabel(label);
+                        }}
+                        className={`ml-1 transition-colors ${
+                          selectedLabel === label
+                            ? "text-white hover:text-red-200"
+                            : "text-red-500 hover:text-red-700"
+                        }`}
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Time will be tracked under this category
+              </p>
+            </div>
           </div>
-          <div className="text-center">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">
-              Focus Time Presets
-            </h4>
-            <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-gray-700">
+                Focus Time Presets
+              </h4>
               <button
-                onClick={() => setCustomWorkTime(25)}
-                className={`p-2 rounded transition-colors ${
-                  settings.workTime === 25
-                    ? "bg-red-100 text-red-700 border-red-300"
-                    : "bg-gray-100 hover:bg-gray-200"
-                }`}
+                type="button"
+                onClick={() => setShowAddPreset(!showAddPreset)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
               >
-                🍅 25min
+                <Plus size={14} />
+                Add New
               </button>
-              <button
-                onClick={() => setCustomWorkTime(45)}
-                className={`p-2 rounded transition-colors ${
-                  settings.workTime === 45
-                    ? "bg-red-100 text-red-700 border-red-300"
-                    : "bg-gray-100 hover:bg-gray-200"
-                }`}
-              >
-                📚 45min
-              </button>
-              <button
-                onClick={() => setCustomWorkTime(90)}
-                className={`p-2 rounded transition-colors ${
-                  settings.workTime === 90
-                    ? "bg-red-100 text-red-700 border-red-300"
-                    : "bg-gray-100 hover:bg-gray-200"
-                }`}
-              >
-                🎯 90min
-              </button>
+            </div>
+
+            {/* Add New Preset */}
+            {showAddPreset && (
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="text"
+                  value={newPresetEmoji}
+                  onChange={(e) => setNewPresetEmoji(e.target.value)}
+                  placeholder="📚"
+                  className="w-12 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-center text-xs"
+                  maxLength="2"
+                />
+                <input
+                  type="number"
+                  value={newPresetTime}
+                  onChange={(e) => setNewPresetTime(e.target.value)}
+                  placeholder="Minutes (1-480)"
+                  className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-xs"
+                  min="1"
+                  max="480"
+                  onKeyPress={(e) =>
+                    e.key === "Enter" && handleAddCustomPreset()
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCustomPreset}
+                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddPreset(false);
+                    setNewPresetTime("");
+                    setNewPresetEmoji("⏰");
+                  }}
+                  className="px-3 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {/* Current Time Presets (Clickable) */}
+            <div className="space-y-2">
+              <p className="text-xs text-gray-600">Select a time preset:</p>
+              <div className="grid grid-cols-3 gap-2">
+                {timePresets.map((preset) => (
+                  <button
+                    key={preset.minutes}
+                    type="button"
+                    onClick={() => setCustomWorkTime(preset.minutes)}
+                    className={`flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                      settings.workTime === preset.minutes
+                        ? "bg-red-100 text-red-700 border-2 border-red-300"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent"
+                    }`}
+                  >
+                    <span>{preset.emoji}</span>
+                    <span>{preset.label}</span>
+                    {preset.isCustom && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveCustomPreset(preset.minutes);
+                        }}
+                        className={`ml-1 transition-colors ${
+                          settings.workTime === preset.minutes
+                            ? "text-red-700 hover:text-red-900"
+                            : "text-red-500 hover:text-red-700"
+                        }`}
+                      >
+                        <Trash2 size={8} />
+                      </button>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

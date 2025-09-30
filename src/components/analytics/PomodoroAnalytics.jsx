@@ -16,6 +16,7 @@ import {
   removeLabel,
   updatePomodoroGoals,
 } from "../../utils/pomodoroStats";
+import { ProgressBar } from "../common/ProgressBar";
 import { AddGoalModal, GoalCard } from "../goals/GoalComponents";
 import { AddTimeModal } from "../timer/AddTimeModal";
 
@@ -261,7 +262,6 @@ export const PomodoroAnalytics = () => {
     type,
     currentMinutes,
     goalMinutes,
-    color,
     editValue,
     onEditChange,
   }) => (
@@ -309,14 +309,9 @@ export const PomodoroAnalytics = () => {
         </span>
       </div>
 
-      <div className="w-full bg-gray-200 rounded-full h-3">
-        <div
-          className={`h-3 rounded-full transition-all duration-300 ${color}`}
-          style={{
-            width: `${Math.min((currentMinutes / goalMinutes) * 100, 100)}%`,
-          }}
-        />
-      </div>
+      <ProgressBar
+        percentage={Math.min((currentMinutes / goalMinutes) * 100, 100)}
+      />
 
       <div className="flex justify-between text-xs text-gray-500 mt-2">
         <span>
@@ -404,13 +399,6 @@ export const PomodoroAnalytics = () => {
               type={goalType}
               currentMinutes={value}
               goalMinutes={goalMinutes}
-              color={
-                color.includes("blue")
-                  ? "bg-blue-500"
-                  : color.includes("green")
-                  ? "bg-green-500"
-                  : "bg-purple-500"
-              }
               editValue={editValue}
               onEditChange={onEditChange}
             />

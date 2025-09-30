@@ -62,6 +62,7 @@ import "./utils/toastUtils"; // Import to set up global toast function
 
 const TodayTasksSection = ({
   tasks,
+  completedOneTimeTasks = [],
   onAddTask,
   onToggleTask,
   onDeleteTask,
@@ -117,8 +118,11 @@ const TodayTasksSection = ({
 
   const visibleTasks = todayTasks.filter((task) => !task.completed);
   const completedTasks = todayTasks.filter((task) => task.completed).length;
-  const totalTasks = todayTasks.length;
-  const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  const completedOneTimeTasksCount = completedOneTimeTasks.length;
+  const totalTasks = todayTasks.length + completedOneTimeTasksCount;
+  const totalCompletedTasks = completedTasks + completedOneTimeTasksCount;
+  const progress =
+    totalTasks > 0 ? (totalCompletedTasks / totalTasks) * 100 : 0;
   const remainingTasks = visibleTasks.length;
 
   // Calculate task counts by category for the filter
@@ -798,6 +802,7 @@ export default function App() {
   const [roadmap, setRoadmap] = useState(null);
   const [todayTasks, setTodayTasks] = useState([]);
   const [todayDailyTasks, setTodayDailyTasks] = useState([]);
+  const [completedOneTimeTasks, setCompletedOneTimeTasks] = useState([]);
   const [books, setBooks] = useState(getInitialBooks());
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -843,9 +848,10 @@ export default function App() {
   // Persistent Pomodoro timer state
   const [pomodoroState, setPomodoroState] = useState({
     isRunning: false,
-    timeLeft: 25 * 60, // 25 minutes in seconds
+    timeLeft: 30 * 60, // 30 minutes in seconds (updated default)
     currentState: "work", // 'work', 'shortBreak', 'longBreak'
-    totalTime: 25 * 60,
+    totalTime: 30 * 60,
+    selectedLabel: "programming", // Default category
   });
 
   // Pomodoro timer interval ref
@@ -897,7 +903,9 @@ export default function App() {
       // Add completed session time to statistics
       const completedMinutes = Math.floor(pomodoroState.totalTime / 60);
       if (completedMinutes > 0) {
-        addPomodoroTime(completedMinutes);
+        // Use the selected label from timer state, fallback to "study" if not available
+        const category = pomodoroState.selectedLabel || "study";
+        addPomodoroTime(completedMinutes, category);
       }
 
       // Play timer completion sound
@@ -928,6 +936,7 @@ export default function App() {
     pomodoroState.isRunning,
     pomodoroState.currentState,
     pomodoroState.totalTime,
+    pomodoroState.selectedLabel,
   ]);
 
   // Pomodoro timer state management
@@ -946,6 +955,11 @@ export default function App() {
   const handlePomodoroIconClick = () => {
     // Always just open the modal
     setShowPomodoroTimer(true);
+  };
+
+  const handleNavigationClick = (targetSection) => {
+    setShowPomodoroTimer(false);
+    setActiveSection(targetSection);
   };
 
   const handleNextQuote = () => {
@@ -975,6 +989,7 @@ export default function App() {
     const loadFromLocalStorage = () => {
       let storedRoadmap = null;
       let storedTodayTasks = null;
+      let storedCompletedOneTimeTasks = [];
       let storedTodayDailyTasks = null;
       let storedBooks = null;
       let storedQuoteIndex = null;
@@ -987,6 +1002,12 @@ export default function App() {
         const todayTasksString = localStorage.getItem("todayTasks");
         if (todayTasksString) {
           storedTodayTasks = JSON.parse(todayTasksString);
+        }
+        const completedOneTimeTasksString = localStorage.getItem(
+          "completedOneTimeTasks"
+        );
+        if (completedOneTimeTasksString) {
+          storedCompletedOneTimeTasks = JSON.parse(completedOneTimeTasksString);
         }
         const todayDailyTasksString = localStorage.getItem("todayDailyTasks");
         if (todayDailyTasksString) {
@@ -1020,6 +1041,8 @@ export default function App() {
       } else {
         setTodayTasks([]);
       }
+
+      setCompletedOneTimeTasks(storedCompletedOneTimeTasks);
 
       if (storedTodayDailyTasks) {
         setTodayDailyTasks(storedTodayDailyTasks);
@@ -1081,6 +1104,10 @@ export default function App() {
       try {
         localStorage.setItem("roadmap", JSON.stringify(roadmap));
         localStorage.setItem("todayTasks", JSON.stringify(todayTasks));
+        localStorage.setItem(
+          "completedOneTimeTasks",
+          JSON.stringify(completedOneTimeTasks)
+        );
         saveBooksToStorage(books);
         localStorage.setItem(
           "todayDailyTasks",
@@ -1094,7 +1121,15 @@ export default function App() {
     }, 500); // Debounce to 500ms
 
     return () => clearTimeout(timeoutId);
-  }, [roadmap, todayTasks, todayDailyTasks, books, quoteIndex, loading]);
+  }, [
+    roadmap,
+    todayTasks,
+    completedOneTimeTasks,
+    todayDailyTasks,
+    books,
+    quoteIndex,
+    loading,
+  ]);
 
   // --- Daily Reset Logic for localStorage-only App ---
   useEffect(() => {
@@ -1146,8 +1181,12 @@ export default function App() {
           // Update state for today's tasks
           setTodayTasks(resetTasks);
 
+          // Clear completed one-time tasks for the new day
+          setCompletedOneTimeTasks([]);
+
           // Save to localStorage
           localStorage.setItem("todayTasks", JSON.stringify(resetTasks));
+          localStorage.setItem("completedOneTimeTasks", JSON.stringify([]));
           localStorage.setItem("todayTasksLastReset", today);
 
           console.log("✅ Daily reset completed for localStorage-only app");
@@ -1583,11 +1622,30 @@ export default function App() {
     setTodayTasks((prev) => [...prev, newTask]);
   };
   const handleToggleTodayTask = (taskId) =>
-    setTodayTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task
-      )
-    );
+    setTodayTasks((prev) => {
+      const task = prev.find((t) => t.id === taskId);
+      if (!task) return prev;
+
+      // If task is being completed and it's a one-time task (normal priority + no repeat)
+      if (
+        !task.completed &&
+        task.priority === "normal" &&
+        task.repeatType === "none"
+      ) {
+        // Store it as completed one-time task for progress tracking
+        setCompletedOneTimeTasks((prevCompleted) => [
+          ...prevCompleted,
+          { ...task, completed: true, completedAt: new Date().toISOString() },
+        ]);
+        // Remove it permanently from the main list
+        return prev.filter((t) => t.id !== taskId);
+      }
+
+      // Otherwise, just toggle completion status
+      return prev.map((t) =>
+        t.id === taskId ? { ...t, completed: !t.completed } : t
+      );
+    });
   const handleDeleteTodayTask = (taskId) =>
     setTodayTasks((prev) => prev.filter((task) => task.id !== taskId));
   const handleEditTodayTask = (taskId, newText) =>
@@ -2495,7 +2553,7 @@ export default function App() {
 
   const handleDragEnter = (e, index) => {
     e.preventDefault();
-    // Always set drag over index, don't depend on state  
+    // Always set drag over index, don't depend on state
     setDragOverIndex(index);
   };
 
@@ -2510,13 +2568,13 @@ export default function App() {
   const handleDrop = (e, dropIndex) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Get dragged task ID from dataTransfer first, fallback to state
-    let draggedId = e.dataTransfer.getData('text/plain');
+    let draggedId = e.dataTransfer.getData("text/plain");
     if (!draggedId) {
       draggedId = draggedTaskId;
     }
-    
+
     console.log("🎯 Drop at index:", dropIndex, "dragged task:", draggedId);
 
     if (!draggedId) {
@@ -3004,6 +3062,7 @@ export default function App() {
               />
               <TodayTasksSection
                 tasks={todayTasks}
+                completedOneTimeTasks={completedOneTimeTasks}
                 onAddTask={handleAddTodayTask}
                 onToggleTask={handleToggleTodayTask}
                 onDeleteTask={handleDeleteTodayTask}
@@ -3017,23 +3076,35 @@ export default function App() {
               />
             </>
           )}
-          {activeSection === "books" && <TodaySection />}
+          {activeSection === "books" && (
+            <>
+              <div className="mb-6">
+                <CountdownTimer />
+              </div>
+              <TodaySection />
+            </>
+          )}
           {activeSection === "progress" && roadmap && (
-            <div className="bg-white rounded-2xl p-6 mb-8 shadow-lg border border-gray-100">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                <div className="flex-1 flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-gray-900">
-                    Overall Progress
-                  </h2>
-                  <span className="text-lg font-mono text-indigo-600 font-semibold ml-4">
-                    {overallProgress.toFixed(2)}%
-                  </span>
+            <>
+              <div className="mb-6">
+                <CountdownTimer />
+              </div>
+              <div className="bg-white rounded-2xl p-6 mb-8 shadow-lg border border-gray-100">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                  <div className="flex-1 flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Overall Progress
+                    </h2>
+                    <span className="text-lg font-mono text-indigo-600 font-semibold ml-4">
+                      {overallProgress.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <ProgressBar percentage={overallProgress} />
                 </div>
               </div>
-              <div className="mt-4">
-                <ProgressBar percentage={overallProgress} />
-              </div>
-            </div>
+            </>
           )}
           {activeSection === "progress" &&
             roadmap &&
@@ -3095,6 +3166,8 @@ export default function App() {
           )}
           {activeSection === "analytics" && (
             <div className="space-y-8">
+              {/* Time Left Section */}
+              <CountdownTimer />
               {/* Pomodoro Statistics Section - Only analytics content */}
               <PomodoroAnalytics />
             </div>
@@ -3342,7 +3415,7 @@ export default function App() {
                 ? "text-indigo-600"
                 : "text-gray-400 hover:text-indigo-500"
             }`}
-            onClick={() => setActiveSection("home")}
+            onClick={() => handleNavigationClick("home")}
           >
             {" "}
             <HomeIcon className="w-6 h-6 mb-1" />{" "}
@@ -3354,7 +3427,7 @@ export default function App() {
                 ? "text-indigo-600"
                 : "text-gray-400 hover:text-indigo-500"
             }`}
-            onClick={() => setActiveSection("progress")}
+            onClick={() => handleNavigationClick("progress")}
           >
             {" "}
             <BarChart2Icon className="w-6 h-6 mb-1" />{" "}
@@ -3366,7 +3439,7 @@ export default function App() {
                 ? "text-indigo-600"
                 : "text-gray-400 hover:text-indigo-500"
             }`}
-            onClick={() => setActiveSection("books")}
+            onClick={() => handleNavigationClick("books")}
           >
             {" "}
             <BookOpenIcon className="w-6 h-6 mb-1" />{" "}
@@ -3378,7 +3451,7 @@ export default function App() {
                 ? "text-indigo-600"
                 : "text-gray-400 hover:text-indigo-500"
             }`}
-            onClick={() => setActiveSection("analytics")}
+            onClick={() => handleNavigationClick("analytics")}
           >
             {" "}
             <BarChart2Icon className="w-6 h-6 mb-1" />{" "}
@@ -3390,7 +3463,7 @@ export default function App() {
                 ? "text-indigo-600"
                 : "text-gray-400 hover:text-indigo-500"
             }`}
-            onClick={() => setActiveSection("profile")}
+            onClick={() => handleNavigationClick("profile")}
           >
             {" "}
             <UserCircleIcon className="w-6 h-6 mb-1" />{" "}

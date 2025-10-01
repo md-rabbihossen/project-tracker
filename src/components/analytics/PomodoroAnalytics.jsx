@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Check, Clock, Edit2, Plus, Target, TrendingUp, X } from "lucide-react";
+import { Check, Clock, Edit2, Plus, Target, TrendingUp, TrendingDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   addLabel,
@@ -19,6 +19,40 @@ import {
 import { ProgressBar } from "../common/ProgressBar";
 import { AddGoalModal, GoalCard } from "../goals/GoalComponents";
 import { AddTimeModal } from "../timer/AddTimeModal";
+
+// Helper function to calculate percentage change
+const calculatePercentageChange = (current, previous) => {
+  if (previous === 0 && current === 0) return { percentage: 0, isPositive: null };
+  if (previous === 0) return { percentage: 100, isPositive: true };
+  
+  const change = ((current - previous) / previous) * 100;
+  return {
+    percentage: Math.abs(Math.round(change)),
+    isPositive: change >= 0
+  };
+};
+
+// Progress Indicator Component
+const ProgressIndicator = ({ current, previous, className = "" }) => {
+  const { percentage, isPositive } = calculatePercentageChange(current, previous);
+  
+  if (percentage === 0 && isPositive === null) return null;
+  
+  return (
+    <div className={`flex items-center gap-1 ${className}`}>
+      {isPositive ? (
+        <TrendingUp size={14} className="text-green-600" />
+      ) : (
+        <TrendingDown size={14} className="text-red-600" />
+      )}
+      <span className={`text-xs font-medium ${
+        isPositive ? 'text-green-600' : 'text-red-600'
+      }`}>
+        {percentage}%
+      </span>
+    </div>
+  );
+};
 
 export const PomodoroAnalytics = () => {
   const [activeTab, setActiveTab] = useState("today");
@@ -360,9 +394,18 @@ export const PomodoroAnalytics = () => {
             />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-gray-800 text-sm sm:text-base">
-              {title}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-gray-800 text-sm sm:text-base">
+                {title}
+              </h3>
+              {previousValue !== undefined && (
+                <ProgressIndicator
+                  current={value}
+                  previous={previousValue}
+                  className="flex-shrink-0"
+                />
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-gray-600 truncate">
               {subtitle}
             </p>

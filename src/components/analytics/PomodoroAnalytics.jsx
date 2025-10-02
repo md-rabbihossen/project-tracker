@@ -17,6 +17,7 @@ import {
   formatDuration,
   getAllCurrentStats,
   getAvailableLabels,
+  getBestRecords,
   getLifetimeStats,
   getPomodoroGoals,
   getPreviousDayStats,
@@ -28,6 +29,9 @@ import {
 import { ProgressBar } from "../common/ProgressBar";
 import { AddGoalModal, GoalCard } from "../goals/GoalComponents";
 import { AddTimeModal } from "../timer/AddTimeModal";
+import AdvancedAnalytics from "./AdvancedAnalytics";
+import ProductivityInsights from "./ProductivityInsights";
+import TimeComparisonDashboard from "./TimeComparisonDashboard";
 
 // Helper function to calculate percentage change
 const calculatePercentageChange = (current, previous) => {
@@ -69,6 +73,37 @@ const ProgressIndicator = ({ current, previous, className = "" }) => {
   );
 };
 
+// Best Record Card Component
+const BestRecordCard = ({ title, record, color, formatDate }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    className={`bg-white rounded-xl p-4 shadow-sm border ${color} relative overflow-hidden`}
+  >
+    <div className="absolute top-2 right-2">
+      <div className="text-2xl">🏆</div>
+    </div>
+    <h4 className="font-semibold text-gray-800 mb-2 text-sm">{title}</h4>
+    {record.minutes > 0 ? (
+      <>
+        <div
+          className={`text-2xl font-bold mb-1 ${color
+            .replace("border-", "text-")
+            .replace("-200", "-600")}`}
+        >
+          {formatDuration(record.minutes)}
+        </div>
+        <div className="text-sm text-gray-600 space-y-1">
+          <p>{record.sessions} sessions</p>
+          <p className="text-xs text-gray-500">{formatDate(record)}</p>
+        </div>
+      </>
+    ) : (
+      <div className="text-gray-400 text-sm py-2">No record yet</div>
+    )}
+  </motion.div>
+);
+
 export const PomodoroAnalytics = () => {
   const [activeTab, setActiveTab] = useState("today");
   const [stats, setStats] = useState({
@@ -107,6 +142,13 @@ export const PomodoroAnalytics = () => {
   // User Goals state (different from Pomodoro goals)
   const [userGoals, setUserGoals] = useState([]);
   const [addGoalModalOpen, setAddGoalModalOpen] = useState(false);
+
+  // Best Records state
+  const [bestRecords, setBestRecords] = useState({
+    bestDay: { minutes: 0, date: "", sessions: 0 },
+    bestWeek: { minutes: 0, weekStart: "", sessions: 0 },
+    bestMonth: { minutes: 0, month: "", sessions: 0 },
+  });
 
   // User Goals functions
   const loadUserGoals = () => {
@@ -155,6 +197,7 @@ export const PomodoroAnalytics = () => {
         loadGoals();
         loadLabels();
         loadUserGoals();
+        loadBestRecords();
       }, 100);
     };
 
@@ -164,6 +207,7 @@ export const PomodoroAnalytics = () => {
     const interval = setInterval(() => {
       console.log("🔄 Refreshing analytics stats...");
       loadStats();
+      loadBestRecords();
     }, 60000);
 
     return () => clearInterval(interval);
@@ -214,6 +258,11 @@ export const PomodoroAnalytics = () => {
     setAvailableLabels(labels);
   };
 
+  const loadBestRecords = () => {
+    const records = getBestRecords();
+    setBestRecords(records);
+  };
+
   const handleEditGoals = () => {
     setEditingGoals(true);
     setTempGoals(goals);
@@ -239,6 +288,7 @@ export const PomodoroAnalytics = () => {
     // Force immediate refresh after adding time
     setTimeout(() => {
       loadStats();
+      loadBestRecords();
     }, 100);
   };
 
@@ -278,6 +328,47 @@ export const PomodoroAnalytics = () => {
 
   const getCurrentMonthName = () => {
     return new Date().toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  // Helper functions for formatting best record dates
+  const formatBestDayDate = (record) => {
+    if (!record.date) return "";
+    const date = new Date(record.date);
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const formatBestWeekDate = (record) => {
+    if (!record.weekStart) return "";
+    const startDate = new Date(record.weekStart);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+
+    const startStr = startDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    const endStr = endDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    return `${startStr} - ${endStr}`;
+  };
+
+  const formatBestMonthDate = (record) => {
+    if (!record.month) return "";
+    const [year, month] = record.month.split("-");
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString("en-US", {
       month: "long",
       year: "numeric",
     });
@@ -495,20 +586,55 @@ export const PomodoroAnalytics = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-red-100 rounded-xl">
-            <Clock size={24} className="text-red-600" />
-          </div>
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-800">
-              Pomodoro Statistics
-            </h2>
-            <p className="text-sm sm:text-base text-gray-600">
-              Track your focus time and productivity
-            </p>
+      {/* Enhanced Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl p-6 mb-6 text-white relative overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-black/10 backdrop-blur-sm"></div>
+        <div className="relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                <Clock size={28} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-bold mb-1">
+                  Analytics Dashboard
+                </h2>
+                <p className="text-white/90 text-sm sm:text-base">
+                  Comprehensive insights into your productivity journey
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="flex gap-4 text-center">
+              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
+                <div className="text-xl font-bold">
+                  {Math.round((stats.today.minutes / 60) * 10) / 10}
+                </div>
+                <div className="text-xs text-white/80">Hours Today</div>
+              </div>
+              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
+                <div className="text-xl font-bold">{stats.today.sessions}</div>
+                <div className="text-xs text-white/80">Sessions</div>
+              </div>
+              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
+                <div className="text-xl font-bold">
+                  {Math.round((stats.today.minutes / goals.dailyMinutes) * 100)}
+                  %
+                </div>
+                <div className="text-xs text-white/80">Daily Goal</div>
+              </div>
+            </div>
           </div>
         </div>
+      </motion.div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
         <div className="flex items-center gap-2">
           {!editingGoals ? (
             <button
@@ -546,26 +672,71 @@ export const PomodoroAnalytics = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="flex border-b border-gray-200 overflow-x-auto">
+      {/* Enhanced Tabs */}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
+        <div className="flex border-b border-gray-200 overflow-x-auto bg-gray-50/50">
           {[
-            { id: "today", label: "Today", icon: Clock },
-            { id: "week", label: "This Week", icon: TrendingUp },
-            { id: "month", label: "This Month", icon: Target },
-            { id: "lifetime", label: "Lifetime", icon: Clock },
+            {
+              id: "today",
+              label: "Today",
+              icon: Clock,
+              color: "text-blue-600",
+            },
+            {
+              id: "week",
+              label: "This Week",
+              icon: TrendingUp,
+              color: "text-green-600",
+            },
+            {
+              id: "month",
+              label: "This Month",
+              icon: Target,
+              color: "text-purple-600",
+            },
+            {
+              id: "lifetime",
+              label: "Lifetime",
+              icon: Clock,
+              color: "text-orange-600",
+            },
+            {
+              id: "insights",
+              label: "Insights",
+              icon: TrendingUp,
+              color: "text-pink-600",
+            },
+            {
+              id: "advanced",
+              label: "Analytics",
+              icon: Target,
+              color: "text-indigo-600",
+            },
+            {
+              id: "comparison",
+              label: "Compare",
+              icon: TrendingUp,
+              color: "text-cyan-600",
+            },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all duration-200 whitespace-nowrap relative ${
                 activeTab === tab.id
-                  ? "border-indigo-500 text-indigo-600 bg-indigo-50"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                  ? `border-indigo-500 ${tab.color} bg-white shadow-sm`
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-white/50"
               }`}
             >
               <tab.icon size={16} />
               {tab.label}
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 bg-white rounded-t-lg border-b-2 border-indigo-500 -z-10"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
             </button>
           ))}
         </div>
@@ -574,60 +745,252 @@ export const PomodoroAnalytics = () => {
           {/* Today Tab */}
           {activeTab === "today" && (
             <div className="space-y-6">
-              <StatCard
-                title="Today"
-                subtitle={new Date().toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "short",
-                  day: "numeric",
-                })}
-                value={stats.today.minutes}
-                sessions={stats.today.sessions}
-                labels={stats.today.labels}
-                color="border-blue-200"
-                previousValue={previousStats.previousDay.minutes}
-                showGoal={true}
-                goalMinutes={goals.dailyMinutes}
-                goalType="daily"
-                editValue={tempGoals.dailyMinutes}
-                onEditChange={(value) =>
-                  setTempGoals((prev) => ({ ...prev, dailyMinutes: value }))
-                }
-              />
-
-              {/* Previous Day Comparison */}
+              {/* Quick Navigation for Today Tab */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100"
+                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
               >
-                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <TrendingUp size={20} className="text-blue-600" />
-                  Previous Day Comparison
-                </h3>
-                <div className="bg-white rounded-lg p-4 shadow-sm">
-                  <h4 className="font-semibold text-gray-800 mb-2">
-                    Yesterday
-                  </h4>
-                  <div className="text-lg font-bold text-blue-600">
-                    {formatDuration(previousStats.previousDay.minutes)}
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    {previousStats.previousDay.sessions} sessions
-                  </p>
-                  {Object.keys(previousStats.previousDay.labels || {}).length >
-                    0 && (
-                    <div className="mt-2 text-xs text-gray-500">
-                      <strong>Breakdown:</strong>{" "}
-                      {Object.entries(previousStats.previousDay.labels)
-                        .map(
-                          ([label, minutes]) =>
-                            `${label}: ${formatDuration(minutes)}`
-                        )
-                        .join(", ")}
-                    </div>
-                  )}
+                <h4 className="text-sm font-medium text-gray-700 mb-3">
+                  Quick Jump to Sections:
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById("today-stats")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    className="px-3 py-1 text-xs bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors"
+                  >
+                    📊 Today's Stats
+                  </button>
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById("insights-section")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    className="px-3 py-1 text-xs bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-200 transition-colors"
+                  >
+                    🧠 Smart Insights
+                  </button>
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById("analytics-section")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    className="px-3 py-1 text-xs bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
+                  >
+                    📈 Analytics
+                  </button>
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById("comparison-section")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    className="px-3 py-1 text-xs bg-orange-100 text-orange-600 rounded-full hover:bg-orange-200 transition-colors"
+                  >
+                    ⚖️ Comparisons
+                  </button>
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById("goals-section")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    className="px-3 py-1 text-xs bg-pink-100 text-pink-600 rounded-full hover:bg-pink-200 transition-colors"
+                  >
+                    🎯 Goals
+                  </button>
                 </div>
+              </motion.div>
+
+              {/* Today's Main Stats Section */}
+              <div id="today-stats">
+                <StatCard
+                  title="Today"
+                  subtitle={new Date().toLocaleDateString("en-US", {
+                    weekday: "long",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                  value={stats.today.minutes}
+                  sessions={stats.today.sessions}
+                  labels={stats.today.labels}
+                  color="border-blue-200"
+                  previousValue={previousStats.previousDay.minutes}
+                  showGoal={true}
+                  goalMinutes={goals.dailyMinutes}
+                  goalType="daily"
+                  editValue={tempGoals.dailyMinutes}
+                  onEditChange={(value) =>
+                    setTempGoals((prev) => ({ ...prev, dailyMinutes: value }))
+                  }
+                />
+
+                {/* Best Day Record */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100"
+                >
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <Target size={20} className="text-blue-600" />
+                    Best Day Record
+                  </h3>
+                  <BestRecordCard
+                    title="Your Best Day Ever"
+                    record={bestRecords.bestDay}
+                    color="border-blue-200"
+                    formatDate={formatBestDayDate}
+                  />
+                </motion.div>
+
+                {/* Previous Day Comparison */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100"
+                >
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <TrendingUp size={20} className="text-blue-600" />
+                    Previous Day Comparison
+                  </h3>
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <h4 className="font-semibold text-gray-800 mb-2">
+                      Yesterday
+                    </h4>
+                    <div className="text-lg font-bold text-blue-600">
+                      {formatDuration(previousStats.previousDay.minutes)}
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      {previousStats.previousDay.sessions} sessions
+                    </p>
+                    {Object.keys(previousStats.previousDay.labels || {})
+                      .length > 0 && (
+                      <div className="mt-2 text-xs text-gray-500">
+                        <strong>Breakdown:</strong>{" "}
+                        {Object.entries(previousStats.previousDay.labels)
+                          .map(
+                            ([label, minutes]) =>
+                              `${label}: ${formatDuration(minutes)}`
+                          )
+                          .join(", ")}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Enhanced Analytics Sections for Today Tab */}
+
+              {/* Productivity Insights Section */}
+              <motion.div
+                id="insights-section"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100"
+              >
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <TrendingUp size={24} className="text-indigo-600" />
+                  Smart Productivity Insights
+                </h3>
+                <ProductivityInsights
+                  stats={{
+                    today: stats.today,
+                    week: stats.week,
+                    month: stats.month,
+                    previousDay: previousStats.previousDay,
+                    previousWeek: previousStats.previousWeek,
+                    previousMonth: previousStats.previousMonth,
+                  }}
+                  goals={goals}
+                  bestRecords={bestRecords}
+                />
+              </motion.div>
+
+              {/* Advanced Analytics Section */}
+              <motion.div
+                id="analytics-section"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100"
+              >
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <Target size={24} className="text-green-600" />
+                  Advanced Analytics Dashboard
+                </h3>
+                <AdvancedAnalytics stats={stats} goals={goals} />
+              </motion.div>
+
+              {/* Time Comparison Section */}
+              <motion.div
+                id="comparison-section"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100"
+              >
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <TrendingUp size={24} className="text-orange-600" />
+                  Time Comparison Dashboard
+                </h3>
+                <TimeComparisonDashboard
+                  stats={stats}
+                  previousStats={previousStats}
+                  goals={goals}
+                  bestRecords={bestRecords}
+                />
+              </motion.div>
+
+              {/* Personal Goals Section (Embedded in Today) */}
+              <motion.div
+                id="goals-section"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-6 border border-pink-100"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4">
+                  <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                    <Target size={24} className="text-pink-600" />
+                    Personal Goals Progress
+                  </h3>
+                  <button
+                    onClick={() => setAddGoalModalOpen(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors"
+                  >
+                    <Plus size={14} />
+                    Add Goal
+                  </button>
+                </div>
+
+                {userGoals.length === 0 ? (
+                  <div className="text-center py-8 bg-white rounded-lg">
+                    <Target size={48} className="mx-auto text-gray-300 mb-3" />
+                    <p className="text-gray-500 mb-4">
+                      No personal goals yet. Start by adding your first goal!
+                    </p>
+                    <button
+                      onClick={() => setAddGoalModalOpen(true)}
+                      className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition-colors"
+                    >
+                      Add Your First Goal
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {userGoals.map((goal) => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        onUpdate={updateUserGoal}
+                        onDelete={deleteUserGoal}
+                      />
+                    ))}
+                  </div>
+                )}
               </motion.div>
             </div>
           )}
@@ -651,6 +1014,24 @@ export const PomodoroAnalytics = () => {
                   setTempGoals((prev) => ({ ...prev, weeklyMinutes: value }))
                 }
               />
+
+              {/* Best Week Record */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <Target size={20} className="text-green-600" />
+                  Best Week Record
+                </h3>
+                <BestRecordCard
+                  title="Your Best Week Ever"
+                  record={bestRecords.bestWeek}
+                  color="border-green-200"
+                  formatDate={formatBestWeekDate}
+                />
+              </motion.div>
 
               {/* Previous Week Comparison */}
               <motion.div
@@ -739,6 +1120,24 @@ export const PomodoroAnalytics = () => {
                   setTempGoals((prev) => ({ ...prev, monthlyMinutes: value }))
                 }
               />
+
+              {/* Best Month Record */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl p-4 border border-purple-100"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <Target size={20} className="text-purple-600" />
+                  Best Month Record
+                </h3>
+                <BestRecordCard
+                  title="Your Best Month Ever"
+                  record={bestRecords.bestMonth}
+                  color="border-purple-200"
+                  formatDate={formatBestMonthDate}
+                />
+              </motion.div>
 
               {/* Previous Month Comparison */}
               <motion.div
@@ -861,55 +1260,39 @@ export const PomodoroAnalytics = () => {
               </motion.div>
             </div>
           )}
+
+          {/* Insights Tab */}
+          {activeTab === "insights" && (
+            <ProductivityInsights
+              stats={{
+                today: stats.today,
+                week: stats.week,
+                month: stats.month,
+                previousDay: previousStats.previousDay,
+                previousWeek: previousStats.previousWeek,
+                previousMonth: previousStats.previousMonth,
+              }}
+              goals={goals}
+              bestRecords={bestRecords}
+            />
+          )}
+
+          {/* Advanced Analytics Tab */}
+          {activeTab === "advanced" && (
+            <AdvancedAnalytics stats={stats} goals={goals} />
+          )}
+
+          {/* Comparison Dashboard Tab */}
+          {activeTab === "comparison" && (
+            <TimeComparisonDashboard
+              stats={stats}
+              previousStats={previousStats}
+              goals={goals}
+              bestRecords={bestRecords}
+            />
+          )}
         </div>
       </div>
-
-      {/* User Goals Section */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg border border-gray-100"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4">
-          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-            <Target size={20} className="text-blue-600" />
-            Personal Goals
-          </h3>
-          <button
-            onClick={() => setAddGoalModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-          >
-            <Plus size={14} />
-            Add Goal
-          </button>
-        </div>
-
-        {userGoals.length === 0 ? (
-          <div className="text-center py-8">
-            <Target size={48} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-gray-500 mb-4">
-              No personal goals yet. Start by adding your first goal!
-            </p>
-            <button
-              onClick={() => setAddGoalModalOpen(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Add Your First Goal
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {userGoals.map((goal) => (
-              <GoalCard
-                key={goal.id}
-                goal={goal}
-                onUpdate={updateUserGoal}
-                onDelete={deleteUserGoal}
-              />
-            ))}
-          </div>
-        )}
-      </motion.div>
 
       {/* Add Time Modal */}
       <AddTimeModal

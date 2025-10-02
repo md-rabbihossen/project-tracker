@@ -64,6 +64,11 @@ export const initializePomodoroStats = () => {
       previousWeek: {},
       previousMonth: {},
     },
+    bestRecords: {
+      bestDay: { minutes: 0, date: "", sessions: 0 }, // Best single day
+      bestWeek: { minutes: 0, weekStart: "", sessions: 0 }, // Best week
+      bestMonth: { minutes: 0, month: "", sessions: 0 }, // Best month
+    },
   };
   return stats;
 };
@@ -101,6 +106,14 @@ export const getPomodoroStats = () => {
       // Ensure lifetime labels exist (backward compatibility)
       if (!stats.lifetime.labels) {
         stats.lifetime.labels = {};
+      }
+      // Ensure bestRecords exist (backward compatibility)
+      if (!stats.bestRecords) {
+        stats.bestRecords = {
+          bestDay: { minutes: 0, date: "", sessions: 0 },
+          bestWeek: { minutes: 0, weekStart: "", sessions: 0 },
+          bestMonth: { minutes: 0, month: "", sessions: 0 },
+        };
       }
       return stats;
     } catch (error) {
@@ -252,6 +265,14 @@ export const addPomodoroTime = (minutes, label = "study") => {
   });
 
   savePomodoroStats(stats);
+
+  // Check for new best records after adding time
+  updateBestRecords(
+    stats.daily[today],
+    stats.weekly[thisWeek],
+    stats.monthly[thisMonth]
+  );
+
   return stats;
 };
 
@@ -333,7 +354,12 @@ export const getLifetimeStats = () => {
 // Add manual time (from the Add Time button)
 export const addManualTime = (hours, minutes, label = "study") => {
   const totalMinutes = hours * 60 + minutes;
-  return addPomodoroTime(totalMinutes, label);
+  const result = addPomodoroTime(totalMinutes, label);
+
+  // Check for new records after manual time addition
+  checkAndUpdateRecords();
+
+  return result;
 };
 
 // Get available labels
@@ -737,4 +763,93 @@ export const removeCustomTimePreset = (minutes) => {
   const updatedPresets = presets.filter((preset) => preset.minutes !== minutes);
   saveCustomTimePresets(updatedPresets);
   return updatedPresets;
+};
+
+// Get best records (daily, weekly, monthly)
+export const getBestRecords = () => {
+  const stats = getPomodoroStats();
+  return (
+    stats.bestRecords || {
+      bestDay: { minutes: 0, date: "", sessions: 0 },
+      bestWeek: { minutes: 0, weekStart: "", sessions: 0 },
+      bestMonth: { minutes: 0, month: "", sessions: 0 },
+    }
+  );
+};
+
+// Update best records when new records are achieved
+export const updateBestRecords = (currentDay, currentWeek, currentMonth) => {
+  const stats = getPomodoroStats();
+
+  // Ensure bestRecords exist
+  if (!stats.bestRecords) {
+    stats.bestRecords = {
+      bestDay: { minutes: 0, date: "", sessions: 0 },
+      bestWeek: { minutes: 0, weekStart: "", sessions: 0 },
+      bestMonth: { minutes: 0, month: "", sessions: 0 },
+    };
+  }
+
+  let recordsUpdated = false;
+
+  // Check and update best day
+  if (currentDay.minutes > stats.bestRecords.bestDay.minutes) {
+    stats.bestRecords.bestDay = {
+      minutes: currentDay.minutes,
+      date: getCurrentDate(),
+      sessions: currentDay.sessions,
+    };
+    recordsUpdated = true;
+    console.log(
+      `🏆 New best day record! ${
+        currentDay.minutes
+      } minutes on ${getCurrentDate()}`
+    );
+  }
+
+  // Check and update best week
+  if (currentWeek.minutes > stats.bestRecords.bestWeek.minutes) {
+    stats.bestRecords.bestWeek = {
+      minutes: currentWeek.minutes,
+      weekStart: getWeekStartDate(),
+      sessions: currentWeek.sessions,
+    };
+    recordsUpdated = true;
+    console.log(
+      `🏆 New best week record! ${
+        currentWeek.minutes
+      } minutes for week starting ${getWeekStartDate()}`
+    );
+  }
+
+  // Check and update best month
+  if (currentMonth.minutes > stats.bestRecords.bestMonth.minutes) {
+    stats.bestRecords.bestMonth = {
+      minutes: currentMonth.minutes,
+      month: getCurrentMonth(),
+      sessions: currentMonth.sessions,
+    };
+    recordsUpdated = true;
+    console.log(
+      `🏆 New best month record! ${
+        currentMonth.minutes
+      } minutes for ${getCurrentMonth()}`
+    );
+  }
+
+  if (recordsUpdated) {
+    savePomodoroStats(stats);
+  }
+
+  return stats.bestRecords;
+};
+
+// Check for record updates (call this when stats are updated)
+export const checkAndUpdateRecords = () => {
+  const currentStats = getAllCurrentStats();
+  return updateBestRecords(
+    currentStats.daily,
+    currentStats.weekly,
+    currentStats.monthly
+  );
 };

@@ -1,5 +1,14 @@
 import { motion } from "framer-motion";
-import { Check, Clock, Edit2, Plus, Target, TrendingUp, TrendingDown, X } from "lucide-react";
+import {
+  Check,
+  Clock,
+  Edit2,
+  Plus,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   addLabel,
@@ -22,22 +31,26 @@ import { AddTimeModal } from "../timer/AddTimeModal";
 
 // Helper function to calculate percentage change
 const calculatePercentageChange = (current, previous) => {
-  if (previous === 0 && current === 0) return { percentage: 0, isPositive: null };
+  if (previous === 0 && current === 0)
+    return { percentage: 0, isPositive: null };
   if (previous === 0) return { percentage: 100, isPositive: true };
-  
+
   const change = ((current - previous) / previous) * 100;
   return {
     percentage: Math.abs(Math.round(change)),
-    isPositive: change >= 0
+    isPositive: change >= 0,
   };
 };
 
 // Progress Indicator Component
 const ProgressIndicator = ({ current, previous, className = "" }) => {
-  const { percentage, isPositive } = calculatePercentageChange(current, previous);
-  
+  const { percentage, isPositive } = calculatePercentageChange(
+    current,
+    previous
+  );
+
   if (percentage === 0 && isPositive === null) return null;
-  
+
   return (
     <div className={`flex items-center gap-1 ${className}`}>
       {isPositive ? (
@@ -45,9 +58,11 @@ const ProgressIndicator = ({ current, previous, className = "" }) => {
       ) : (
         <TrendingDown size={14} className="text-red-600" />
       )}
-      <span className={`text-xs font-medium ${
-        isPositive ? 'text-green-600' : 'text-red-600'
-      }`}>
+      <span
+        className={`text-xs font-medium ${
+          isPositive ? "text-green-600" : "text-red-600"
+        }`}
+      >
         {percentage}%
       </span>
     </div>

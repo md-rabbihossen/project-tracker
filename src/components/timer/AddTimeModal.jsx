@@ -53,6 +53,44 @@ export const AddTimeModal = ({
     onClose();
   };
 
+  const handleCategoryClick = (label) => {
+    // If clicking on the already selected label, just update selection (no auto-submit)
+    if (selectedLabel === label) {
+      setSelectedLabel(label);
+      return;
+    }
+
+    // If clicking on a different category and there's time entered, auto-submit
+    const hoursNum = parseInt(hours) || 0;
+    const minutesNum = parseInt(minutes) || 0;
+
+    if (hoursNum > 0 || minutesNum > 0) {
+      // Convert if minutes are more than 60
+      let totalMinutes = minutesNum;
+      let totalHours = hoursNum;
+
+      if (totalMinutes >= 60) {
+        totalHours += Math.floor(totalMinutes / 60);
+        totalMinutes = totalMinutes % 60;
+      }
+
+      onAddTime(totalHours, totalMinutes, label);
+
+      // Reset form
+      setHours("");
+      setMinutes("");
+      setSelectedLabel(
+        availableLabels.includes("programming")
+          ? "programming"
+          : availableLabels[0] || "study"
+      );
+      onClose();
+    } else {
+      // If no time entered, just update selection
+      setSelectedLabel(label);
+    }
+  };
+
   const handleAddLabel = () => {
     if (newLabel.trim()) {
       onAddLabel(newLabel.trim());
@@ -183,7 +221,7 @@ export const AddTimeModal = ({
                 <button
                   key={label}
                   type="button"
-                  onClick={() => setSelectedLabel(label)}
+                  onClick={() => handleCategoryClick(label)}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors ${
                     selectedLabel === label
                       ? "bg-indigo-600 text-white border-2 border-indigo-600"

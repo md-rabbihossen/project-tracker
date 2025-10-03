@@ -745,69 +745,6 @@ export const PomodoroAnalytics = () => {
           {/* Today Tab */}
           {activeTab === "today" && (
             <div className="space-y-6">
-              {/* Quick Navigation for Today Tab */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-              >
-                <h4 className="text-sm font-medium text-gray-700 mb-3">
-                  Quick Jump to Sections:
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() =>
-                      document
-                        .getElementById("today-stats")
-                        ?.scrollIntoView({ behavior: "smooth" })
-                    }
-                    className="px-3 py-1 text-xs bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors"
-                  >
-                    📊 Today's Stats
-                  </button>
-                  <button
-                    onClick={() =>
-                      document
-                        .getElementById("insights-section")
-                        ?.scrollIntoView({ behavior: "smooth" })
-                    }
-                    className="px-3 py-1 text-xs bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-200 transition-colors"
-                  >
-                    🧠 Smart Insights
-                  </button>
-                  <button
-                    onClick={() =>
-                      document
-                        .getElementById("analytics-section")
-                        ?.scrollIntoView({ behavior: "smooth" })
-                    }
-                    className="px-3 py-1 text-xs bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
-                  >
-                    📈 Analytics
-                  </button>
-                  <button
-                    onClick={() =>
-                      document
-                        .getElementById("comparison-section")
-                        ?.scrollIntoView({ behavior: "smooth" })
-                    }
-                    className="px-3 py-1 text-xs bg-orange-100 text-orange-600 rounded-full hover:bg-orange-200 transition-colors"
-                  >
-                    ⚖️ Comparisons
-                  </button>
-                  <button
-                    onClick={() =>
-                      document
-                        .getElementById("goals-section")
-                        ?.scrollIntoView({ behavior: "smooth" })
-                    }
-                    className="px-3 py-1 text-xs bg-pink-100 text-pink-600 rounded-full hover:bg-pink-200 transition-colors"
-                  >
-                    🎯 Goals
-                  </button>
-                </div>
-              </motion.div>
-
               {/* Today's Main Stats Section */}
               <div id="today-stats">
                 <StatCard

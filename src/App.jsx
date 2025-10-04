@@ -333,18 +333,19 @@ const Week = ({
   onEditTask,
   onRenameTitle,
   isCurrentWeek,
+  isFirstVisibleWeek,
   onOpenNewTaskModal,
   onOpenProgressModal,
 }) => {
-  const [isOpen, setIsOpen] = useState(isCurrentWeek);
+  const [isOpen, setIsOpen] = useState(isCurrentWeek || isFirstVisibleWeek);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editingTaskText, setEditingTaskText] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState(weekData.title);
 
   useEffect(() => {
-    setIsOpen(isCurrentWeek);
-  }, [isCurrentWeek]);
+    setIsOpen(isCurrentWeek || isFirstVisibleWeek);
+  }, [isCurrentWeek, isFirstVisibleWeek]);
 
   const weekProgress = useMemo(
     () => calculateWeekProgress(weekData),
@@ -446,6 +447,8 @@ const Week = ({
                 const completed = topic.completedDays || 0;
                 const total = topic.totalDays || 1;
                 taskProgress = (completed / total) * 100;
+              } else if (topic.type === "simple") {
+                taskProgress = topic.completed ? 100 : 0;
               } else {
                 const completed = topic.completedMinutes || 0;
                 const total = topic.totalMinutes || 1;
@@ -480,9 +483,43 @@ const Week = ({
                         </button>
                       </div>
                     ) : (
-                      <h4 className="font-semibold text-gray-800 flex-grow">
-                        {topic.text}
-                      </h4>
+                      <div className="flex items-center flex-grow gap-3">
+                        {topic.type === "simple" ? (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Toggle completion status
+                                onEditTask(topic.id, topic.text, {
+                                  completed: !topic.completed,
+                                });
+                              }}
+                              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                topic.completed
+                                  ? "bg-green-500 border-green-500 text-white"
+                                  : "border-gray-300 hover:border-indigo-400"
+                              }`}
+                            >
+                              {topic.completed && (
+                                <CheckCircleIcon className="w-3 h-3" />
+                              )}
+                            </button>
+                            <h4
+                              className={`font-semibold flex-grow ${
+                                topic.completed
+                                  ? "text-gray-500 line-through"
+                                  : "text-gray-800"
+                              }`}
+                            >
+                              {topic.text}
+                            </h4>
+                          </>
+                        ) : (
+                          <h4 className="font-semibold text-gray-800 flex-grow">
+                            {topic.text}
+                          </h4>
+                        )}
+                      </div>
                     )}
                     <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                       <button
@@ -499,28 +536,49 @@ const Week = ({
                       </button>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center text-sm text-gray-600 mb-2">
-                    <span>{formatProgress(topic)}</span>
-                    <span className="font-mono text-indigo-500 font-semibold">
-                      {taskProgress.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-grow">
-                      <ProgressBar percentage={taskProgress} />
-                    </div>
-                    <button
-                      onClick={() => onOpenProgressModal(topic)}
-                      className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs"
-                    >
-                      Add Progress
-                    </button>
-                    {taskProgress >= 100 && (
-                      <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
-                        Completed
+                  {topic.type !== "simple" && (
+                    <div className="flex justify-between items-center text-sm text-gray-600 mb-2">
+                      <span>{formatProgress(topic)}</span>
+                      <span className="font-mono text-indigo-500 font-semibold">
+                        {taskProgress.toFixed(1)}%
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  {topic.type === "simple" ? (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-grow text-sm text-gray-600">
+                        <span
+                          className={`font-medium ${
+                            topic.completed ? "text-green-600" : "text-gray-600"
+                          }`}
+                        >
+                          {topic.completed ? "✓ Completed" : "◯ Pending"}
+                        </span>
+                      </div>
+                      {topic.completed && (
+                        <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
+                          Completed
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-grow">
+                        <ProgressBar percentage={taskProgress} />
+                      </div>
+                      <button
+                        onClick={() => onOpenProgressModal(topic)}
+                        className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs"
+                      >
+                        Add Progress
+                      </button>
+                      {taskProgress >= 100 && (
+                        <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
+                          Completed
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -1564,6 +1622,24 @@ export default function App() {
 
         const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
         updateTodayDailyTasks(updatedTodayTasks);
+      } else if (taskData.type === "simple") {
+        week.topics.push({
+          text: taskData.name,
+          completed: false,
+          id: `custom-roadmap-${Date.now()}`,
+          type: "simple",
+        });
+
+        // Also add to Track Progress section as a simple task
+        const newTodayTask = {
+          id: `today-${Date.now()}`,
+          name: `${taskData.name} (Weekly)`,
+          type: "simple",
+          completed: false,
+        };
+
+        const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
+        updateTodayDailyTasks(updatedTodayTasks);
       }
     }
     setRoadmap(newRoadmap);
@@ -1580,13 +1656,15 @@ export default function App() {
     setRoadmap(newRoadmap);
   };
 
-  const handleEditRoadmapTask = (taskId, newText) => {
+  const handleEditRoadmapTask = (taskId, newText, additionalData = {}) => {
     const newRoadmap = deepClone(roadmap);
     for (const phase of newRoadmap.phases) {
       for (const week of phase.weeks) {
         const topic = week.topics.find((t) => t.id === taskId);
         if (topic) {
           topic.text = newText;
+          // Handle additional properties like completion status for simple tasks
+          Object.assign(topic, additionalData);
           break;
         }
       }
@@ -1886,6 +1964,8 @@ export default function App() {
             const completed = topic.completedDays || 0;
             const total = topic.totalDays || 1;
             totalProgress += (completed / total) * 100;
+          } else if (topic.type === "simple") {
+            totalProgress += topic.completed ? 100 : 0;
           } else {
             const completed = topic.completedMinutes || 0;
             const total = topic.totalMinutes || 1;
@@ -3140,7 +3220,7 @@ export default function App() {
                 </div>
                 {phase.weeks
                   .filter((week) => calculateWeekProgress(week) < 100)
-                  .map((week) => (
+                  .map((week, index, filteredWeeks) => (
                     <Week
                       key={week.week}
                       weekData={{
@@ -3151,6 +3231,7 @@ export default function App() {
                       onEditTask={handleEditRoadmapTask}
                       onRenameTitle={handleRenameWeekTitle}
                       isCurrentWeek={week.week === currentWeekNumber}
+                      isFirstVisibleWeek={index === 0}
                       onOpenNewTaskModal={openNewTaskModal}
                       onOpenProgressModal={openProgressModal}
                     />
@@ -4161,6 +4242,12 @@ function AddNewWeeklyTaskModal({ isOpen, onClose, onSave }) {
         type: type,
         days: d,
       };
+    } else if (type === "simple") {
+      taskData = {
+        name: name.trim(),
+        type: type,
+        completed: false, // Simple tasks start as incomplete
+      };
     }
 
     if (name.trim()) {
@@ -4219,6 +4306,7 @@ function AddNewWeeklyTaskModal({ isOpen, onClose, onSave }) {
               <option value="course">Course (Time)</option>
               <option value="book">Book (Pages)</option>
               <option value="day">Challenge (Days)</option>
+              <option value="simple">Simple Task (Checkbox)</option>
             </select>
           </div>
           {type === "course" ? (
@@ -4277,6 +4365,24 @@ function AddNewWeeklyTaskModal({ isOpen, onClose, onSave }) {
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none"
                 min="1"
               />
+            </div>
+          ) : type === "simple" ? (
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  <div className="w-5 h-5 border-2 border-blue-400 rounded bg-white"></div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-blue-800">
+                    Simple Task
+                  </h4>
+                  <p className="text-xs text-blue-600 mt-1">
+                    This will create a simple checkbox task that can be marked
+                    as complete/incomplete, similar to the "Today's Tasks"
+                    section.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : null}
         </div>

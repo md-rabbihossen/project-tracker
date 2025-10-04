@@ -604,6 +604,8 @@ export function formatProgress(topic) {
     const completed = topic.completedDays || 0;
     const total = topic.totalDays || 0;
     return `${completed} of ${total} Days Completed`;
+  } else if (topic.type === "simple") {
+    return topic.completed ? "✓ Completed" : "◯ Pending";
   }
   const minutes = topic.completedMinutes || 0;
   const totalMinutes = topic.totalMinutes || 0;
@@ -708,6 +710,8 @@ export const calculateWeekProgress = (week) => {
       const completed = topic.completedDays || 0;
       const total = topic.totalDays || 1;
       return sum + (completed / total) * 100;
+    } else if (topic.type === "simple") {
+      return sum + (topic.completed ? 100 : 0);
     }
     const completed = topic.completedMinutes || 0;
     const total = topic.totalMinutes || 1;

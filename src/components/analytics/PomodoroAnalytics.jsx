@@ -613,9 +613,9 @@ export const PomodoroAnalytics = () => {
             <div className="flex gap-4 text-center">
               <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
                 <div className="text-xl font-bold">
-                  {Math.round((stats.today.minutes / 60) * 10) / 10}
+                  {formatDuration(stats.today.minutes)}
                 </div>
-                <div className="text-xs text-white/80">Hours Today</div>
+                <div className="text-xs text-white/80">Total Today</div>
               </div>
               <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
                 <div className="text-xl font-bold">{stats.today.sessions}</div>

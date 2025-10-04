@@ -217,16 +217,16 @@ export const PomodoroAnalytics = () => {
       loadBestRecords();
     }, 60000);
 
-    // Set up separate interval to refresh last 6 hours stats every hour
-    const hourlyInterval = setInterval(() => {
+    // Set up separate interval to refresh last 6 hours stats every 5 minutes for real-time updates
+    const frequentInterval = setInterval(() => {
       console.log("🕒 Refreshing last 6 hours stats...");
       const last6Hours = getLast6HoursStats();
       setLast6HoursStats(last6Hours);
-    }, 3600000); // 1 hour = 3600000ms
+    }, 300000); // 5 minutes = 300000ms
 
     return () => {
       clearInterval(statsInterval);
-      clearInterval(hourlyInterval);
+      clearInterval(frequentInterval);
     };
   }, []);
 
@@ -247,7 +247,7 @@ export const PomodoroAnalytics = () => {
       lifetime: lifetimeStats,
     });
 
-    // Load last 6 hours stats
+    // Load last 6 hours stats - this will now use real timestamped data
     const last6Hours = getLast6HoursStats();
     console.log("📊 Loaded last 6 hours stats:", last6Hours);
     setLast6HoursStats(last6Hours);

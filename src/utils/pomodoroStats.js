@@ -853,3 +853,88 @@ export const checkAndUpdateRecords = () => {
     currentStats.monthly
   );
 };
+
+// Get stats for the last 6 hours
+export const getLast6HoursStats = () => {
+  const stats = getPomodoroStats();
+  const now = new Date();
+
+  let totalMinutes = 0;
+  let totalSessions = 0;
+  const labels = {};
+
+  // Get today's date and yesterday's date (in case 6 hours spans across days)
+  const todayKey = getCurrentDate();
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayKey = yesterdayDate.toISOString().split("T")[0];
+
+  // Since we don't have hourly granularity, we'll estimate based on daily data
+  // This is a simplified approach - for exact tracking, we'd need to store timestamps
+
+  // Check today's data
+  const todayStats = stats.daily[todayKey] || {
+    minutes: 0,
+    sessions: 0,
+    labels: {},
+  };
+
+  // If current time is early in the day (before 6 AM), include some of yesterday's data
+  const currentHour = now.getHours();
+  if (currentHour < 6) {
+    // Include partial yesterday data (estimate based on time proportion)
+    const yesterdayStats = stats.daily[yesterdayKey] || {
+      minutes: 0,
+      sessions: 0,
+      labels: {},
+    };
+    const hoursFromYesterday = 6 - currentHour;
+    const yesterdayProportion = hoursFromYesterday / 24;
+
+    totalMinutes += Math.round(yesterdayStats.minutes * yesterdayProportion);
+    totalSessions += Math.round(yesterdayStats.sessions * yesterdayProportion);
+
+    // Add proportional labels from yesterday
+    Object.entries(yesterdayStats.labels || {}).forEach(([label, minutes]) => {
+      labels[label] =
+        (labels[label] || 0) + Math.round(minutes * yesterdayProportion);
+    });
+
+    // Add today's data (all of it since it's within 6 hours)
+    totalMinutes += todayStats.minutes;
+    totalSessions += todayStats.sessions;
+
+    // Add today's labels
+    Object.entries(todayStats.labels || {}).forEach(([label, minutes]) => {
+      labels[label] = (labels[label] || 0) + minutes;
+    });
+  } else {
+    // We're past 6 AM, so estimate based on current hour progression
+    // This assumes even distribution throughout the day (not perfect but reasonable)
+    const dayProgression = currentHour / 24;
+    const sixHourWindow = 6 / 24; // 6 hours as fraction of day
+
+    // Use a higher proportion if we're later in the day
+    let proportion;
+    if (currentHour >= 6) {
+      // Normal day progression - estimate last 6 hours from today's total
+      proportion = Math.min(sixHourWindow * (24 / Math.max(currentHour, 6)), 1);
+    } else {
+      proportion = dayProgression;
+    }
+
+    totalMinutes = Math.round(todayStats.minutes * proportion);
+    totalSessions = Math.round(todayStats.sessions * proportion);
+
+    // Add proportional labels
+    Object.entries(todayStats.labels || {}).forEach(([label, minutes]) => {
+      labels[label] = Math.round(minutes * proportion);
+    });
+  }
+
+  return {
+    minutes: totalMinutes,
+    sessions: totalSessions,
+    labels: labels,
+  };
+};

@@ -18,6 +18,7 @@ import {
   getAllCurrentStats,
   getAvailableLabels,
   getBestRecords,
+  getLast6HoursStats,
   getLifetimeStats,
   getPomodoroGoals,
   getPreviousDayStats,
@@ -113,6 +114,12 @@ export const PomodoroAnalytics = () => {
     lifetime: { totalMinutes: 0, totalSessions: 0, startDate: "", labels: {} },
   });
 
+  const [last6HoursStats, setLast6HoursStats] = useState({
+    minutes: 0,
+    sessions: 0,
+    labels: {},
+  });
+
   const [previousStats, setPreviousStats] = useState({
     previousDay: { minutes: 0, sessions: 0, labels: {} },
     previousWeek: { minutes: 0, sessions: 0, labels: {} },
@@ -204,13 +211,23 @@ export const PomodoroAnalytics = () => {
     loadStatsWithDelay();
 
     // Set up interval to refresh stats every minute
-    const interval = setInterval(() => {
+    const statsInterval = setInterval(() => {
       console.log("🔄 Refreshing analytics stats...");
       loadStats();
       loadBestRecords();
     }, 60000);
 
-    return () => clearInterval(interval);
+    // Set up separate interval to refresh last 6 hours stats every hour
+    const hourlyInterval = setInterval(() => {
+      console.log("🕒 Refreshing last 6 hours stats...");
+      const last6Hours = getLast6HoursStats();
+      setLast6HoursStats(last6Hours);
+    }, 3600000); // 1 hour = 3600000ms
+
+    return () => {
+      clearInterval(statsInterval);
+      clearInterval(hourlyInterval);
+    };
   }, []);
 
   const loadStats = () => {
@@ -229,6 +246,11 @@ export const PomodoroAnalytics = () => {
       month: currentStats.monthly,
       lifetime: lifetimeStats,
     });
+
+    // Load last 6 hours stats
+    const last6Hours = getLast6HoursStats();
+    console.log("📊 Loaded last 6 hours stats:", last6Hours);
+    setLast6HoursStats(last6Hours);
 
     const prevDayStats = getPreviousDayStats();
     const prevWeekStats = getPreviousWeekStats();
@@ -616,6 +638,12 @@ export const PomodoroAnalytics = () => {
                   {formatDuration(stats.today.minutes)}
                 </div>
                 <div className="text-xs text-white/80">Total Today</div>
+              </div>
+              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
+                <div className="text-xl font-bold">
+                  {formatDuration(last6HoursStats.minutes)}
+                </div>
+                <div className="text-xs text-white/80">Last 6 Hours</div>
               </div>
               <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
                 <div className="text-xl font-bold">{stats.today.sessions}</div>

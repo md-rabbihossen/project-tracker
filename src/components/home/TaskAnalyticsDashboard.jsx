@@ -1,14 +1,7 @@
 import { motion } from "framer-motion";
-import {
-  Award,
-  Calendar,
-  CheckCircle,
-  Clock,
-  TrendingUp,
-  Zap,
-} from "lucide-react";
+import { TrendingUp, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
-import { formatDuration, getTodayStats } from "../../utils/pomodoroStats";
+import { getTodayStats } from "../../utils/pomodoroStats";
 
 const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
   const [analytics, setAnalytics] = useState({
@@ -20,76 +13,76 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
   });
 
   useEffect(() => {
+    const calculateAnalytics = () => {
+      const today = new Date();
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay());
+
+      // Get actual pomodoro time data from analytics
+      const pomodoroStats = getTodayStats();
+      const todayActualMinutes = pomodoroStats.minutes || 0;
+
+      // Today's stats
+      const todayTasks = tasks.filter((task) => shouldShowTaskToday(task));
+      const todayCompleted = todayTasks.filter((task) => task.completed).length;
+      const todayPending = todayTasks.length - todayCompleted;
+      const todayTotal = todayTasks.length + completedOneTimeTasks.length;
+
+      // Week's stats (simplified - would need historical data)
+      const weekCompleted = todayCompleted + completedOneTimeTasks.length;
+      const weekPending = todayPending;
+      const weekTotal = todayTotal;
+
+      // Productivity score (0-100)
+      const completionRate =
+        todayTotal > 0 ? (weekCompleted / todayTotal) * 100 : 0;
+      const priorityTasksCompleted = todayTasks.filter(
+        (task) => task.priority === "high" && task.completed
+      ).length;
+      const totalPriorityTasks = todayTasks.filter(
+        (task) => task.priority === "high"
+      ).length;
+
+      const priorityBonus =
+        totalPriorityTasks > 0
+          ? (priorityTasksCompleted / totalPriorityTasks) * 20
+          : 0;
+
+      const productivityScore = Math.min(
+        100,
+        Math.round(completionRate + priorityBonus)
+      );
+
+      setAnalytics({
+        todayStats: {
+          completed: todayCompleted + completedOneTimeTasks.length,
+          pending: todayPending,
+          total: todayTotal,
+        },
+        weekStats: {
+          completed: weekCompleted,
+          pending: weekPending,
+          total: weekTotal,
+        },
+        productivity: {
+          score: productivityScore,
+          trend:
+            productivityScore > 70
+              ? "up"
+              : productivityScore > 40
+              ? "stable"
+              : "down",
+        },
+        streaks: {
+          current: completedOneTimeTasks.length > 0 ? 1 : 0,
+          longest: Math.max(completedOneTimeTasks.length, 3),
+        },
+        timeSpent: { today: todayActualMinutes, week: weekCompleted * 15 }, // Use actual pomodoro time for today
+      });
+    };
+
     calculateAnalytics();
   }, [tasks, completedOneTimeTasks]);
-
-  const calculateAnalytics = () => {
-    const today = new Date();
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay());
-
-    // Get actual pomodoro time data from analytics
-    const pomodoroStats = getTodayStats();
-    const todayActualMinutes = pomodoroStats.minutes || 0;
-
-    // Today's stats
-    const todayTasks = tasks.filter((task) => shouldShowTaskToday(task));
-    const todayCompleted = todayTasks.filter((task) => task.completed).length;
-    const todayPending = todayTasks.length - todayCompleted;
-    const todayTotal = todayTasks.length + completedOneTimeTasks.length;
-
-    // Week's stats (simplified - would need historical data)
-    const weekCompleted = todayCompleted + completedOneTimeTasks.length;
-    const weekPending = todayPending;
-    const weekTotal = todayTotal;
-
-    // Productivity score (0-100)
-    const completionRate =
-      todayTotal > 0 ? (weekCompleted / todayTotal) * 100 : 0;
-    const priorityTasksCompleted = todayTasks.filter(
-      (task) => task.priority === "high" && task.completed
-    ).length;
-    const totalPriorityTasks = todayTasks.filter(
-      (task) => task.priority === "high"
-    ).length;
-
-    const priorityBonus =
-      totalPriorityTasks > 0
-        ? (priorityTasksCompleted / totalPriorityTasks) * 20
-        : 0;
-
-    const productivityScore = Math.min(
-      100,
-      Math.round(completionRate + priorityBonus)
-    );
-
-    setAnalytics({
-      todayStats: {
-        completed: todayCompleted + completedOneTimeTasks.length,
-        pending: todayPending,
-        total: todayTotal,
-      },
-      weekStats: {
-        completed: weekCompleted,
-        pending: weekPending,
-        total: weekTotal,
-      },
-      productivity: {
-        score: productivityScore,
-        trend:
-          productivityScore > 70
-            ? "up"
-            : productivityScore > 40
-            ? "stable"
-            : "down",
-      },
-      streaks: {
-        current: completedOneTimeTasks.length > 0 ? 1 : 0,
-        longest: Math.max(completedOneTimeTasks.length, 3),
-      },
-      timeSpent: { today: todayActualMinutes, week: weekCompleted * 15 }, // Use actual pomodoro time for today
-    });
-  };
 
   const shouldShowTaskToday = (task) => {
     const today = new Date();
@@ -107,34 +100,7 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
     return task.date === todayDateString || !task.date;
   };
 
-  const StatCard = ({ title, value, subtitle, icon: Icon, color, trend }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`bg-white rounded-xl p-4 shadow-sm border ${color} relative overflow-hidden`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <Icon
-          size={20}
-          className={color.replace("border-", "text-").replace("-200", "-600")}
-        />
-        {trend && (
-          <div className="flex items-center gap-1">
-            {trend === "up" ? (
-              <TrendingUp size={14} className="text-green-600" />
-            ) : trend === "down" ? (
-              <TrendingUp size={14} className="text-red-600 rotate-180" />
-            ) : null}
-          </div>
-        )}
-      </div>
-      <div className="space-y-1">
-        <div className="text-2xl font-bold text-gray-800">{value}</div>
-        <div className="text-sm font-medium text-gray-600">{title}</div>
-        {subtitle && <div className="text-xs text-gray-500">{subtitle}</div>}
-      </div>
-    </motion.div>
-  );
+
 
   const ProductivityMeter = ({ score }) => {
     const getScoreColor = () => {
@@ -263,45 +229,6 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
 
   return (
     <div className="space-y-6">
-      {/* Overview Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Completed Today"
-          value={analytics.todayStats.completed}
-          subtitle={`${analytics.todayStats.pending} remaining`}
-          icon={CheckCircle}
-          color="border-green-200"
-          trend={analytics.todayStats.completed > 0 ? "up" : null}
-        />
-
-        <StatCard
-          title="Weekly Progress"
-          value={`${analytics.weekStats.completed}/${analytics.weekStats.total}`}
-          subtitle="Tasks completed"
-          icon={Calendar}
-          color="border-blue-200"
-        />
-
-        <StatCard
-          title="Current Streak"
-          value={`${analytics.streaks.current} day${
-            analytics.streaks.current !== 1 ? "s" : ""
-          }`}
-          subtitle={`Best: ${analytics.streaks.longest} days`}
-          icon={Award}
-          color="border-purple-200"
-          trend={analytics.streaks.current > 0 ? "up" : null}
-        />
-
-        <StatCard
-          title="Today Total Time"
-          value={formatDuration(analytics.timeSpent.today)}
-          subtitle="Actual time tracked"
-          icon={Clock}
-          color="border-orange-200"
-        />
-      </div>
-
       {/* Productivity Score */}
       <ProductivityMeter score={analytics.productivity.score} />
     </div>

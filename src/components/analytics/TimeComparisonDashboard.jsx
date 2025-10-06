@@ -70,9 +70,13 @@ const TimeComparisonDashboard = ({
         )}
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-            <div className="flex items-center gap-2">
+          <div className="flex items-start justify-between">
+            <h3 className="text-lg font-semibold text-gray-800 pr-2">
+              {title}
+            </h3>
+            <div
+              className={`flex items-center gap-2 ${isRecordDay ? "mt-8" : ""}`}
+            >
               {comparison.trend === "up" ? (
                 <TrendingUp size={16} className="text-green-600" />
               ) : comparison.trend === "down" ? (

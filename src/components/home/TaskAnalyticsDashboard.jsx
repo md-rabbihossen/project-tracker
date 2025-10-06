@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { TrendingUp, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getTodayStats } from "../../utils/pomodoroStats";
 
@@ -99,8 +99,6 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
     }
     return task.date === todayDateString || !task.date;
   };
-
-
 
   const ProductivityMeter = ({ score }) => {
     const getScoreColor = () => {

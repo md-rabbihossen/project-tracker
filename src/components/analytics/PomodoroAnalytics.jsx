@@ -114,6 +114,20 @@ export const PomodoroAnalytics = () => {
     lifetime: { totalMinutes: 0, totalSessions: 0, startDate: "", labels: {} },
   });
 
+  // Helper function to calculate grade based on percentage
+  const calculateGrade = (percentage) => {
+    if (percentage >= 80) return "A+";
+    if (percentage >= 75) return "A";
+    if (percentage >= 70) return "A-";
+    if (percentage >= 65) return "B+";
+    if (percentage >= 60) return "B";
+    if (percentage >= 55) return "B-";
+    if (percentage >= 50) return "C+";
+    if (percentage >= 45) return "C";
+    if (percentage >= 40) return "D";
+    return "F";
+  };
+
   const [last6HoursStats, setLast6HoursStats] = useState({
     minutes: 0,
     sessions: 0,
@@ -655,6 +669,14 @@ export const PomodoroAnalytics = () => {
                   %
                 </div>
                 <div className="text-xs text-white/80">Daily Goal</div>
+              </div>
+              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
+                <div className="text-xl font-bold">
+                  {calculateGrade(
+                    Math.round((stats.today.minutes / goals.dailyMinutes) * 100)
+                  )}
+                </div>
+                <div className="text-xs text-white/80">Grade</div>
               </div>
             </div>
           </div>

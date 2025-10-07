@@ -552,7 +552,7 @@ const Week = ({
                             topic.completed ? "text-green-600" : "text-gray-600"
                           }`}
                         >
-                          {topic.completed ? "✓ Completed" : "◯ Pending"}
+                          {topic.completed ? "✓ Completed" : ""}
                         </span>
                       </div>
                       {topic.completed && (
@@ -1629,17 +1629,6 @@ export default function App() {
           id: `custom-roadmap-${Date.now()}`,
           type: "simple",
         });
-
-        // Also add to Track Progress section as a simple task
-        const newTodayTask = {
-          id: `today-${Date.now()}`,
-          name: `${taskData.name} (Weekly)`,
-          type: "simple",
-          completed: false,
-        };
-
-        const updatedTodayTasks = [...todayDailyTasks, newTodayTask];
-        updateTodayDailyTasks(updatedTodayTasks);
       }
     }
     setRoadmap(newRoadmap);

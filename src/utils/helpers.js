@@ -605,7 +605,7 @@ export function formatProgress(topic) {
     const total = topic.totalDays || 0;
     return `${completed} of ${total} Days Completed`;
   } else if (topic.type === "simple") {
-    return topic.completed ? "✓ Completed" : "◯ Pending";
+    return topic.completed ? "✓ Completed" : "";
   }
   const minutes = topic.completedMinutes || 0;
   const totalMinutes = topic.totalMinutes || 0;

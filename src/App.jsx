@@ -9,6 +9,15 @@ import {
   resetDailyPomodoroStats,
 } from "./utils/pomodoroStats";
 
+// Supabase sync imports
+import LoginPage from "./components/LoginPage";
+import {
+  handleLogout,
+  SyncStatusIndicator,
+  useSupabaseSync,
+} from "./hooks/useSupabaseSync";
+import { syncData } from "./services/supabase";
+
 // Import components
 import {
   ArrowPathIcon,
@@ -613,10 +622,18 @@ const QuoteSection = ({ quote, onClick }) => {
   );
 };
 
-function ProfileMenu({ onImport, onExport, onOpenStats }) {
+function ProfileMenu({
+  onImport,
+  onExport,
+  onOpenStats,
+  isSyncing,
+  lastSyncTime,
+}) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
+  const userName = localStorage.getItem("userName") || "User";
+  const userId = localStorage.getItem("userId") || "";
 
   useEffect(() => {
     if (!open) return;
@@ -633,6 +650,11 @@ function ProfileMenu({ onImport, onExport, onOpenStats }) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
+
+  const copyUserId = () => {
+    navigator.clipboard.writeText(userId);
+    alert("User ID copied to clipboard!");
+  };
 
   return (
     <div className="relative flex flex-col items-center ml-4">
@@ -664,10 +686,23 @@ function ProfileMenu({ onImport, onExport, onOpenStats }) {
           ref={menuRef}
           className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-100 z-50 p-2 text-left flex flex-col"
         >
-          <div className="p-2">
-            <div className="font-semibold text-gray-900 text-base">
-              Name: Rahat
+          <div className="p-3 bg-gray-50 rounded-lg mb-2">
+            <div className="font-semibold text-gray-900 text-base mb-1">
+              {userName}
             </div>
+            <div className="text-xs text-gray-500 mb-2">
+              User ID: {userId.substring(0, 8)}...
+              <button
+                onClick={copyUserId}
+                className="ml-2 text-indigo-600 hover:text-indigo-800"
+              >
+                Copy
+              </button>
+            </div>
+            <SyncStatusIndicator
+              isSyncing={isSyncing}
+              lastSyncTime={lastSyncTime}
+            />
           </div>
           <div className="border-t border-gray-100 my-1"></div>
           <button
@@ -697,6 +732,17 @@ function ProfileMenu({ onImport, onExport, onOpenStats }) {
             className="w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm"
           >
             Export Data
+          </button>
+          <div className="border-t border-gray-100 my-1"></div>
+          <button
+            onClick={() => {
+              if (confirm("Are you sure you want to logout?")) {
+                handleLogout();
+              }
+            }}
+            className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium"
+          >
+            Logout
           </button>
           <div className="border-t border-gray-100 my-1"></div>
           <div className="bg-white p-4 rounded-2xl">
@@ -852,6 +898,22 @@ function AddEditBookModal({ isOpen, onClose, onSave, editingBook }) {
 
 // Main App Component
 export default function App() {
+  // Supabase sync hook - NOW WITH REAL-TIME SYNC! 🚀
+  const {
+    userId,
+    setUserId,
+    isSyncing,
+    lastSyncTime,
+    syncRoadmap,
+    syncTodayTasks,
+    syncBooks,
+    syncPomodoroStats,
+    syncGoals,
+    syncAppSettings,
+    loadInitialData,
+    setupRealtimeSubscriptions,
+  } = useSupabaseSync();
+
   // Refs for various purposes
   const isUserAddingDataRef = useRef(false);
   const syncTimeoutRef = useRef(null);
@@ -1040,7 +1102,207 @@ export default function App() {
     const loadData = async () => {
       setLoading(true);
 
-      // Load data from localStorage only
+      if (userId) {
+        // User is logged in - try to load from Supabase, fallback to localStorage
+        console.log("👤 User logged in, loading data...");
+        try {
+          // Try to load from cloud with timeout
+          const cloudDataPromise = loadInitialData();
+          const timeoutPromise = new Promise((resolve) =>
+            setTimeout(() => resolve(null), 3000)
+          );
+
+          const cloudData = await Promise.race([
+            cloudDataPromise,
+            timeoutPromise,
+          ]);
+
+          if (cloudData) {
+            console.log("☁️ Cloud data loaded successfully");
+            console.log("📦 Cloud data structure:", {
+              hasRoadmap: !!cloudData.roadmap,
+              hasTodayTasks: !!cloudData.todayTasks,
+              todayTasksStructure: cloudData.todayTasks,
+              hasBooks: !!cloudData.books,
+              hasGoals: !!cloudData.goals,
+              goalsCount: cloudData.goals?.length || 0,
+              hasPomodoroStats: !!cloudData.pomodoroStats,
+              dailyProgressCount: cloudData.dailyProgress?.length || 0,
+            });
+
+            let hasAnyCloudData = false;
+
+            // Load roadmap from cloud or localStorage
+            if (cloudData.roadmap) {
+              console.log("✅ Setting roadmap from cloud");
+              setRoadmap(cloudData.roadmap);
+              localStorage.setItem(
+                "roadmap",
+                JSON.stringify(cloudData.roadmap)
+              );
+              hasAnyCloudData = true;
+            } else {
+              console.log(
+                "⚠️ No roadmap in cloud, will use localStorage fallback"
+              );
+            }
+
+            // Load tasks from cloud or localStorage
+            if (cloudData.todayTasks) {
+              const { tasks, completedOneTimeTasks, lastResetDate } =
+                cloudData.todayTasks;
+              const today = getDateString();
+
+              console.log("✅ Tasks loaded from cloud:", {
+                tasks: tasks?.length || 0,
+                completedOneTime: completedOneTimeTasks?.length || 0,
+                lastResetDate,
+                today,
+                needsReset: lastResetDate !== today,
+              });
+
+              // Check if tasks need to be reset (if last reset was not today)
+              if (lastResetDate && lastResetDate !== today) {
+                console.log(
+                  "🔄 Cloud tasks are from previous day, applying reset logic..."
+                );
+
+                // Keep uncompleted tasks
+                const uncompletedTasks = tasks.filter((t) => !t.completed);
+
+                // Reset daily and recurring tasks that were completed
+                const completedRecurringTasks = tasks
+                  .filter(
+                    (t) =>
+                      t.completed &&
+                      (t.isDaily ||
+                        t.repeatType === "daily" ||
+                        shouldShowTaskToday(t))
+                  )
+                  .map((t) => ({ ...t, completed: false }));
+
+                const resetTasks = [
+                  ...uncompletedTasks,
+                  ...completedRecurringTasks,
+                ];
+
+                console.log("📊 Reset applied:", {
+                  uncompleted: uncompletedTasks.length,
+                  resetRecurring: completedRecurringTasks.length,
+                  total: resetTasks.length,
+                });
+
+                // Set reset tasks
+                setTodayTasks(resetTasks);
+                setCompletedOneTimeTasks([]);
+
+                // Save to localStorage
+                localStorage.setItem("todayTasks", JSON.stringify(resetTasks));
+                localStorage.setItem(
+                  "completedOneTimeTasks",
+                  JSON.stringify([])
+                );
+                localStorage.setItem("todayTasksLastReset", today);
+
+                // Sync reset tasks back to cloud immediately
+                console.log("☁️ Syncing reset tasks back to cloud...");
+                syncData.saveTodayTasks(resetTasks, [], today).catch((err) => {
+                  console.error("❌ Failed to sync reset tasks:", err);
+                });
+
+                hasAnyCloudData = true;
+              } else {
+                // Tasks are already reset for today, just load them
+                setTodayTasks(tasks || []);
+                setCompletedOneTimeTasks(completedOneTimeTasks || []);
+                localStorage.setItem("todayTasks", JSON.stringify(tasks || []));
+                localStorage.setItem(
+                  "completedOneTimeTasks",
+                  JSON.stringify(completedOneTimeTasks || [])
+                );
+                if (lastResetDate) {
+                  localStorage.setItem("todayTasksLastReset", lastResetDate);
+                }
+                hasAnyCloudData = true;
+              }
+            }
+
+            // Load books from cloud or localStorage
+            if (cloudData.books) {
+              setBooks(cloudData.books);
+              localStorage.setItem("books", JSON.stringify(cloudData.books));
+              hasAnyCloudData = true;
+            }
+
+            // Load pomodoro stats from cloud or localStorage
+            if (cloudData.pomodoroStats) {
+              console.log("✅ Loading pomodoro stats from cloud");
+              localStorage.setItem(
+                "pomodoroStats",
+                JSON.stringify(cloudData.pomodoroStats)
+              );
+              hasAnyCloudData = true;
+            }
+
+            // Load app settings from cloud or localStorage
+            if (cloudData.appSettings) {
+              console.log("✅ Loading app settings from cloud");
+              localStorage.setItem(
+                "appSettings",
+                JSON.stringify(cloudData.appSettings)
+              );
+              hasAnyCloudData = true;
+            }
+
+            // Load daily progress entries from cloud
+            if (cloudData.dailyProgress && cloudData.dailyProgress.length > 0) {
+              console.log(
+                `✅ Loading ${cloudData.dailyProgress.length} daily progress entries from cloud`
+              );
+              cloudData.dailyProgress.forEach((entry) => {
+                localStorage.setItem(
+                  `dailyProgress_${entry.date}`,
+                  JSON.stringify(entry.progress_data)
+                );
+              });
+              hasAnyCloudData = true;
+            }
+
+            // Load user goals from cloud
+            if (cloudData.goals) {
+              console.log(
+                `✅ Loading ${cloudData.goals.length} goals from cloud`
+              );
+              setGoals(cloudData.goals);
+              localStorage.setItem(
+                "userGoals",
+                JSON.stringify(cloudData.goals)
+              );
+              hasAnyCloudData = true;
+            }
+
+            console.log("✅ Data loaded from Supabase");
+
+            // Only skip localStorage loading if we got ANY data from cloud
+            if (hasAnyCloudData) {
+              console.log(
+                "✅ Prioritizing Supabase data, skipping localStorage fallback"
+              );
+              setLoading(false);
+              return; // Exit early - don't call loadFromLocalStorage()
+            } else {
+              console.log("⚠️ No data in Supabase, loading from localStorage");
+            }
+          } else {
+            console.log("⏱️ Cloud load timeout, using localStorage");
+          }
+        } catch (error) {
+          console.error("❌ Error loading from Supabase:", error);
+        }
+      }
+
+      // Only load from localStorage if we didn't get cloud data
+      console.log("📂 Loading from localStorage (fallback)");
       loadFromLocalStorage();
       setLoading(false);
     };
@@ -1128,7 +1390,8 @@ export default function App() {
     };
 
     loadData();
-  }, []); // Only run once on component mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]); // Only reload when user logs in/out
 
   // Refresh today's progress when analytics section is active or when progress is updated
   useEffect(() => {
@@ -1137,15 +1400,28 @@ export default function App() {
     }
   }, [activeSection]);
 
+  // Listen to dailyProgressUpdate and sync to Supabase
   useEffect(() => {
-    const handleProgressUpdate = () => {
+    const handleProgressUpdate = (event) => {
       setTodayProgress(getTodayProgress());
+
+      // Sync daily progress to Supabase
+      if (userId && event.detail) {
+        const { date, progress } = event.detail;
+        console.log(
+          `📊 Syncing daily progress for ${date} to cloud:`,
+          progress
+        );
+        syncData.saveDailyProgress(date, progress).catch((err) => {
+          console.error("❌ Failed to sync daily progress:", err);
+        });
+      }
     };
 
     window.addEventListener("dailyProgressUpdate", handleProgressUpdate);
     return () =>
       window.removeEventListener("dailyProgressUpdate", handleProgressUpdate);
-  }, []);
+  }, [userId]);
 
   // Update today's progress when analytics section becomes active
   useEffect(() => {
@@ -1154,13 +1430,31 @@ export default function App() {
     }
   }, [activeSection]);
 
-  // Auto-save to localStorage when data changes
+  // Auto-save to localStorage AND Supabase when data changes 🚀
   useEffect(() => {
-    if (loading) return;
+    if (loading) {
+      console.log("⏸️ Auto-save skipped: loading =", loading);
+      return;
+    }
+    if (!userId) {
+      console.log("⏸️ Auto-save skipped: no userId");
+      return;
+    }
 
-    // Debounce localStorage saves to prevent too many writes
-    const timeoutId = setTimeout(() => {
+    console.log("🔔 Auto-save triggered!", {
+      userId: userId.substring(0, 8) + "...",
+      roadmap: roadmap ? "exists" : "null",
+      todayTasks: todayTasks?.length || 0,
+      books: books?.length || 0,
+      goals: goals?.length || 0,
+    });
+
+    // Debounce saves to prevent too many writes
+    const timeoutId = setTimeout(async () => {
       try {
+        console.log("⏰ Debounce timer expired, starting save...");
+
+        // 1. Save to localStorage (instant backup)
         localStorage.setItem("roadmap", JSON.stringify(roadmap));
         localStorage.setItem("todayTasks", JSON.stringify(todayTasks));
         localStorage.setItem(
@@ -1173,11 +1467,73 @@ export default function App() {
           JSON.stringify(todayDailyTasks)
         );
         localStorage.setItem("quoteIndex", quoteIndex.toString());
+        localStorage.setItem("userGoals", JSON.stringify(goals));
         console.log("💾 Data auto-saved to localStorage");
+
+        // 2. Sync to Supabase (cloud backup) 🌩️ - Use direct syncData calls
+        console.log("☁️ Starting Supabase sync...");
+        const syncPromises = [];
+
+        if (roadmap) {
+          console.log("  📍 Adding roadmap to sync queue");
+          syncPromises.push(syncData.saveRoadmap(roadmap));
+        } else {
+          console.log("  ⏭️ Skipping roadmap (null)");
+        }
+
+        if (todayTasks && todayTasks.length > 0) {
+          console.log("  ✅ Adding", todayTasks.length, "tasks to sync queue");
+          const today = getDateString();
+          syncPromises.push(
+            syncData.saveTodayTasks(todayTasks, completedOneTimeTasks, today)
+          );
+        } else {
+          console.log("  ⏭️ Skipping tasks (empty or null)");
+        }
+
+        if (books && books.length > 0) {
+          console.log("  📚 Adding", books.length, "books to sync queue");
+          syncPromises.push(syncData.saveBooks(books));
+        } else {
+          console.log("  ⏭️ Skipping books (empty or null)");
+        }
+
+        if (goals && goals.length > 0) {
+          console.log("  🎯 Adding", goals.length, "goals to sync queue");
+          syncPromises.push(syncData.saveUserGoals(goals));
+        } else {
+          console.log("  ⏭️ Skipping goals (empty or null)");
+        }
+
+        // Sync pomodoro stats
+        const pomodoroStatsString = localStorage.getItem("pomodoroStats");
+        if (pomodoroStatsString) {
+          const pomodoroStats = JSON.parse(pomodoroStatsString);
+          console.log("  ⏱️ Adding pomodoro stats to sync queue");
+          syncPromises.push(syncData.savePomodoroStats(pomodoroStats));
+        } else {
+          console.log(
+            "  ⏭️ Skipping pomodoro stats (not found in localStorage)"
+          );
+        }
+
+        // Sync app settings (quote index, etc.)
+        console.log("  ⚙️ Adding app settings to sync queue");
+        syncPromises.push(syncData.saveAppSettings({ quoteIndex }));
+
+        console.log(
+          "🚀 Waiting for",
+          syncPromises.length,
+          "sync operations..."
+        );
+        // Wait for all syncs to complete
+        await Promise.all(syncPromises);
+
+        console.log("✨ All data synced to cloud successfully!");
       } catch (e) {
-        console.error("Failed to save data to localStorage:", e);
+        console.error("💥 Failed to save/sync data:", e);
       }
-    }, 500); // Debounce to 500ms
+    }, 2000); // Debounce to 2 seconds (give user time to finish typing/editing)
 
     return () => clearTimeout(timeoutId);
   }, [
@@ -1187,7 +1543,10 @@ export default function App() {
     todayDailyTasks,
     books,
     quoteIndex,
+    goals,
     loading,
+    userId,
+    // NOTE: Sync functions deliberately excluded to prevent infinite loops
   ]);
 
   // --- Daily Reset Logic for localStorage-only App ---
@@ -1197,6 +1556,7 @@ export default function App() {
     const doLocalStorageResetIfNeeded = () => {
       // Skip if reset already in progress
       if (resetInProgress || loading) {
+        console.log("⏸️ Reset check skipped:", { resetInProgress, loading });
         return;
       }
 
@@ -1205,8 +1565,15 @@ export default function App() {
         const today = getDateString();
         const lastReset = localStorage.getItem("todayTasksLastReset") || "";
 
+        console.log("📅 Reset check:", {
+          today,
+          lastReset,
+          needsReset: lastReset !== today,
+        });
+
         if (lastReset !== today) {
           console.log("🔄 Starting daily reset for localStorage-only app...");
+          console.log("📊 Before reset - todayTasks count:", todayTasks.length);
 
           // Get current tasks snapshot
           const currentTasks = [...todayTasks];
@@ -1226,6 +1593,12 @@ export default function App() {
             .map((t) => ({ ...t, completed: false }));
 
           const resetTasks = [...uncompletedTasks, ...completedRecurringTasks];
+
+          console.log("📊 After reset:", {
+            uncompletedTasks: uncompletedTasks.length,
+            completedRecurringTasks: completedRecurringTasks.length,
+            resetTasks: resetTasks.length,
+          });
 
           // Reset daily progress
           saveTodayProgress(0, 0);
@@ -1248,6 +1621,19 @@ export default function App() {
           localStorage.setItem("completedOneTimeTasks", JSON.stringify([]));
           localStorage.setItem("todayTasksLastReset", today);
 
+          // Sync reset tasks to Supabase
+          if (userId) {
+            console.log("☁️ Syncing reset tasks to Supabase...");
+            syncData
+              .saveTodayTasks(resetTasks, [], new Date().toISOString())
+              .then(() => {
+                console.log("✅ Reset tasks synced to cloud");
+              })
+              .catch((err) => {
+                console.error("❌ Failed to sync reset tasks:", err);
+              });
+          }
+
           console.log("✅ Daily reset completed for localStorage-only app");
         }
       } catch (error) {
@@ -1267,7 +1653,90 @@ export default function App() {
       clearTimeout(initialTimeout);
       clearInterval(intervalId);
     };
-  }, [loading]); // Only depend on loading since no auth needed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount, interval handles periodic checks
+
+  // Manual sync function for testing
+  const handleManualSync = async (showAlert = true) => {
+    console.log("🔄 MANUAL SYNC TRIGGERED!");
+    console.log("📊 Current data state:", {
+      roadmap: roadmap ? "exists" : "null",
+      todayTasks: todayTasks?.length || 0,
+      books: books?.length || 0,
+      goals: goals?.length || 0,
+    });
+
+    try {
+      const promises = [];
+
+      if (roadmap) {
+        console.log("  📍 Syncing roadmap...");
+        promises.push(syncData.saveRoadmap(roadmap));
+      } else {
+        console.log("  ⏭️ Skipping roadmap (null)");
+      }
+
+      if (todayTasks && todayTasks.length > 0) {
+        console.log("  ✅ Syncing", todayTasks.length, "tasks...");
+        const today = getDateString();
+        promises.push(
+          syncData.saveTodayTasks(todayTasks, completedOneTimeTasks, today)
+        );
+      } else {
+        console.log(
+          "  ⏭️ Skipping tasks (count:",
+          todayTasks?.length || 0,
+          ")"
+        );
+      }
+
+      if (books && books.length > 0) {
+        console.log("  📚 Syncing", books.length, "books...");
+        promises.push(syncData.saveBooks(books));
+      } else {
+        console.log("  ⏭️ Skipping books (count:", books?.length || 0, ")");
+      }
+
+      if (goals && goals.length > 0) {
+        console.log("  🎯 Syncing", goals.length, "goals...");
+        promises.push(syncData.saveUserGoals(goals));
+      } else {
+        console.log("  ⏭️ Skipping goals (count:", goals?.length || 0, ")");
+      }
+
+      // Always sync pomodoro stats (from localStorage)
+      const pomodoroStatsString = localStorage.getItem("pomodoroStats");
+      if (pomodoroStatsString) {
+        const pomodoroStats = JSON.parse(pomodoroStatsString);
+        console.log("  ⏱️ Syncing pomodoro stats...");
+        promises.push(syncData.savePomodoroStats(pomodoroStats));
+      } else {
+        console.log("  ⏭️ Skipping pomodoro stats (not in localStorage)");
+      }
+
+      console.log("  ⚙️ Syncing settings...");
+      promises.push(syncData.saveAppSettings({ quoteIndex }));
+
+      console.log("🚀 Total promises:", promises.length);
+      await Promise.all(promises);
+      console.log("✅ MANUAL SYNC COMPLETE!");
+      if (showAlert) {
+        alert("✅ Data synced to Supabase successfully!");
+      }
+    } catch (error) {
+      console.error("❌ MANUAL SYNC FAILED:", error);
+      if (showAlert) {
+        alert("❌ Sync failed: " + error.message);
+      }
+    }
+  };
+
+  // Helper function to trigger sync for localStorage-only data (like pomodoro)
+  window.triggerDataSync = () => {
+    console.log("🔔 Sync triggered via window.triggerDataSync()");
+    // Call without alert for auto-sync
+    handleManualSync(false);
+  };
 
   const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
@@ -1637,11 +2106,17 @@ export default function App() {
 
   const handleDeleteRoadmapTask = (taskId) => {
     const newRoadmap = deepClone(roadmap);
-    newRoadmap.phases.forEach((p) =>
-      p.weeks.forEach((w) => {
-        w.topics = w.topics.filter((t) => t.id !== taskId);
-      })
-    );
+    if (newRoadmap && newRoadmap.phases) {
+      newRoadmap.phases.forEach((p) => {
+        if (p.weeks) {
+          p.weeks.forEach((w) => {
+            if (w.topics) {
+              w.topics = w.topics.filter((t) => t.id !== taskId);
+            }
+          });
+        }
+      });
+    }
     setRoadmap(newRoadmap);
   };
 
@@ -1899,14 +2374,87 @@ export default function App() {
             }
 
             console.log("✅ Import completed successfully with all app data");
-            alert(
-              "Data imported successfully! The page will refresh to apply all changes."
-            );
 
-            // Small delay to ensure all localStorage writes are completed
-            setTimeout(() => {
-              window.location.reload();
-            }, 100);
+            // Sync imported data to Supabase if logged in
+            if (userId) {
+              console.log("☁️ Syncing imported data to Supabase...");
+
+              const syncPromises = [];
+
+              if (importedData.roadmap !== undefined) {
+                syncPromises.push(syncData.saveRoadmap(importedData.roadmap));
+              }
+
+              if (importedData.todayTasks !== undefined) {
+                const today = getDateString();
+                syncPromises.push(
+                  syncData.saveTodayTasks(
+                    importedData.todayTasks,
+                    importedData.completedOneTimeTasks || [],
+                    today
+                  )
+                );
+              }
+
+              if (importedData.books !== undefined) {
+                syncPromises.push(syncData.saveBooks(importedData.books || []));
+              }
+
+              if (importedData.userGoals) {
+                const goals = JSON.parse(importedData.userGoals);
+                syncPromises.push(syncData.saveUserGoals(goals));
+              }
+
+              if (importedData.pomodoroStats) {
+                const stats = JSON.parse(importedData.pomodoroStats);
+                syncPromises.push(syncData.savePomodoroStats(stats));
+              }
+
+              if (importedData.quoteIndex) {
+                syncPromises.push(
+                  syncData.saveAppSettings({
+                    quoteIndex: parseInt(importedData.quoteIndex),
+                  })
+                );
+              }
+
+              // Sync all daily progress entries
+              if (importedData.dailyProgressData) {
+                Object.entries(importedData.dailyProgressData).forEach(
+                  ([key, value]) => {
+                    if (key.startsWith("dailyProgress_")) {
+                      const date = key.replace("dailyProgress_", "");
+                      const progress = JSON.parse(value);
+                      syncPromises.push(
+                        syncData.saveDailyProgress(date, progress)
+                      );
+                    }
+                  }
+                );
+              }
+
+              Promise.all(syncPromises)
+                .then(() => {
+                  console.log("✅ All imported data synced to Supabase!");
+                  alert(
+                    "Data imported and synced to cloud successfully! The page will refresh to apply all changes."
+                  );
+                  setTimeout(() => window.location.reload(), 100);
+                })
+                .catch((err) => {
+                  console.error("❌ Failed to sync imported data:", err);
+                  alert(
+                    "Data imported to local storage but failed to sync to cloud. Page will refresh.\n\nError: " +
+                      err.message
+                  );
+                  setTimeout(() => window.location.reload(), 100);
+                });
+            } else {
+              alert(
+                "Data imported successfully! The page will refresh to apply all changes."
+              );
+              setTimeout(() => window.location.reload(), 100);
+            }
           } else {
             console.error(
               "Invalid backup file format - no recognizable data found."
@@ -1945,8 +2493,10 @@ export default function App() {
     if (!roadmap || !roadmap.phases) return 0;
     let totalTasks = 0;
     let totalProgress = 0;
-    roadmap.phases.forEach((phase) =>
+    roadmap.phases.forEach((phase) => {
+      if (!phase.weeks) return;
       phase.weeks.forEach((week) => {
+        if (!week.topics) return;
         week.topics.forEach((topic) => {
           totalTasks++;
           if (topic.type === "book") {
@@ -1965,20 +2515,23 @@ export default function App() {
             totalProgress += (completed / total) * 100;
           }
         });
-      })
-    );
+      });
+    });
     return totalTasks > 0 ? totalProgress / totalTasks : 0;
   }, [roadmap]);
 
   const aggregatedStats = useMemo(() => {
-    if (!roadmap) return { courses: {}, books: {}, challenges: {} };
+    if (!roadmap || !roadmap.phases)
+      return { courses: {}, books: {}, challenges: {} };
 
     const courses = {};
     const books = {};
     const challenges = {};
 
     roadmap.phases.forEach((phase) => {
+      if (!phase.weeks) return;
       phase.weeks.forEach((week) => {
+        if (!week.topics) return;
         week.topics.forEach((topic) => {
           if (topic.type === "book") {
             if (!books[topic.text]) books[topic.text] = 0;
@@ -2949,6 +3502,18 @@ export default function App() {
     );
   };
 
+  // Handle login - show LoginPage if no userId
+  const handleLoginSuccess = (newUserId, userName) => {
+    setUserId(newUserId);
+    localStorage.setItem("userId", newUserId);
+    localStorage.setItem("userName", userName);
+    window.location.reload(); // Reload to initialize all data
+  };
+
+  if (!userId) {
+    return <LoginPage onLogin={handleLoginSuccess} />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex justify-center items-center">
@@ -3124,6 +3689,8 @@ export default function App() {
               onImport={handleImport}
               onExport={handleExport}
               onOpenStats={() => setStatsModalOpen(true)}
+              isSyncing={isSyncing}
+              lastSyncTime={lastSyncTime}
             />
           </header>
 
@@ -3849,33 +4416,37 @@ function MasterAddTimeModal({
   const [pages, setPages] = useState("");
 
   const availableTimeTasks = useMemo(() => {
-    if (!roadmap) return [];
+    if (!roadmap || !roadmap.phases) return [];
     const taskSet = new Set();
-    roadmap.phases.forEach((p) =>
-      p.weeks.forEach((w) =>
+    roadmap.phases.forEach((p) => {
+      if (!p.weeks) return;
+      p.weeks.forEach((w) => {
+        if (!w.topics) return;
         w.topics.forEach((t) => {
           if (t.type !== "book" && (t.completedMinutes || 0) < t.totalMinutes) {
             taskSet.add(t.text);
           }
-        })
-      )
-    );
+        });
+      });
+    });
     console.log("⏰ Available time tasks:", Array.from(taskSet));
     return Array.from(taskSet);
   }, [roadmap]);
 
   const availableBookTasks = useMemo(() => {
-    if (!roadmap) return [];
+    if (!roadmap || !roadmap.phases) return [];
     const taskSet = new Set();
-    roadmap.phases.forEach((p) =>
-      p.weeks.forEach((w) =>
+    roadmap.phases.forEach((p) => {
+      if (!p.weeks) return;
+      p.weeks.forEach((w) => {
+        if (!w.topics) return;
         w.topics.forEach((t) => {
           if (t.type === "book" && (t.completedPages || 0) < t.totalPages) {
             taskSet.add(t.text);
           }
-        })
-      )
-    );
+        });
+      });
+    });
     console.log("📚 Available book tasks:", Array.from(taskSet));
     return Array.from(taskSet);
   }, [roadmap]);
@@ -4060,10 +4631,18 @@ function MasterAddTimeModal({
 }
 
 // Modern ProfileMenu with avatar and dropdown (localStorage-only version)
-function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
+function ProfileMenuModern({
+  onImport,
+  onExport,
+  onOpenStats,
+  isSyncing,
+  lastSyncTime,
+}) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
+  const userName = localStorage.getItem("userName") || "User";
+  const userId = localStorage.getItem("userId") || "";
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -4078,6 +4657,11 @@ function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
+
+  const copyUserId = () => {
+    navigator.clipboard.writeText(userId);
+    alert("User ID copied to clipboard!");
+  };
 
   return (
     <>
@@ -4105,11 +4689,23 @@ function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
                 alt="Profile"
                 className="w-12 h-12 rounded-full object-cover border-2 border-indigo-200"
               />
-              <div>
+              <div className="flex-1">
                 <div className="font-semibold text-gray-900 text-base">
-                  Local User
+                  {userName}
                 </div>
-                <div className="text-xs text-gray-500">Data stored locally</div>
+                <div className="text-xs text-gray-500 mb-1">
+                  ID: {userId.substring(0, 8)}...
+                  <button
+                    onClick={copyUserId}
+                    className="ml-1 text-indigo-600 hover:text-indigo-800"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <SyncStatusIndicator
+                  isSyncing={isSyncing}
+                  lastSyncTime={lastSyncTime}
+                />
               </div>
             </div>
 
@@ -4139,6 +4735,18 @@ function ProfileMenuModern({ onImport, onExport, onOpenStats }) {
               className="w-full text-left px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm"
             >
               Export Data
+            </button>
+
+            <div className="border-t border-gray-100 my-2"></div>
+            <button
+              onClick={() => {
+                if (confirm("Are you sure you want to logout?")) {
+                  handleLogout();
+                }
+              }}
+              className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium"
+            >
+              Logout
             </button>
 
             <div className="border-t border-gray-100 my-2"></div>

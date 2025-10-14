@@ -176,6 +176,12 @@ export const getAllCurrentStats = () => {
 // Save stats to localStorage
 export const savePomodoroStats = (stats) => {
   localStorage.setItem("pomodoroStats", JSON.stringify(stats));
+
+  // Trigger sync to Supabase if function is available
+  if (typeof window !== "undefined" && window.triggerDataSync) {
+    console.log("📡 Triggering Supabase sync for pomodoro stats...");
+    setTimeout(() => window.triggerDataSync(), 500); // Small delay to batch multiple updates
+  }
 };
 
 // Update goals

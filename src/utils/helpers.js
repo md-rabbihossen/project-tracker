@@ -674,6 +674,23 @@ export function addToTodayProgress(type, amount) {
 }
 
 export function shouldShowTaskToday(task) {
+  // If task is completed and is a one-time task, check if it was completed today
+  if (task.completed && (!task.repeatType || task.repeatType === "none")) {
+    // If it has a completedAt date, only show if completed today
+    if (task.completedAt) {
+      const completedDate = new Date(task.completedAt).toDateString();
+      const today = new Date().toDateString();
+      // If completed on a previous day, don't show it
+      if (completedDate !== today) {
+        return false;
+      }
+    }
+    // If no completedAt date but it's completed and one-time, hide it (safety measure)
+    else {
+      return false;
+    }
+  }
+
   if (!task.repeatType || task.repeatType === "none") {
     return true;
   }

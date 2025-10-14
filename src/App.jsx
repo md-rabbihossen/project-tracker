@@ -1694,12 +1694,8 @@ export default function App() {
       const task = prev.find((t) => t.id === taskId);
       if (!task) return prev;
 
-      // If task is being completed and it's a one-time task (normal priority + no repeat)
-      if (
-        !task.completed &&
-        task.priority === "normal" &&
-        task.repeatType === "none"
-      ) {
+      // If task is being completed and it's a one-time task (no repeat, regardless of priority)
+      if (!task.completed && task.repeatType === "none") {
         // Store it as completed one-time task for progress tracking
         setCompletedOneTimeTasks((prevCompleted) => [
           ...prevCompleted,
@@ -1709,9 +1705,17 @@ export default function App() {
         return prev.filter((t) => t.id !== taskId);
       }
 
-      // Otherwise, just toggle completion status
+      // For repeating tasks, just toggle completion status and update completedAt
       return prev.map((t) =>
-        t.id === taskId ? { ...t, completed: !t.completed } : t
+        t.id === taskId
+          ? {
+              ...t,
+              completed: !t.completed,
+              completedAt: !t.completed
+                ? new Date().toISOString()
+                : t.completedAt,
+            }
+          : t
       );
     });
   const handleDeleteTodayTask = (taskId) =>

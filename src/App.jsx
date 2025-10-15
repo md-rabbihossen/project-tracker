@@ -59,7 +59,6 @@ import {
   getDateString,
   getInitialBooks,
   getTodayProgress,
-  getTodayString,
   getWeekInfo,
   quotes,
   saveBooksToStorage,
@@ -144,17 +143,16 @@ const TodayTasksSection = ({
       return acc;
     }, {});
 
-  // Add 'all' category count
-  taskCounts.all = tasks.filter((task) => shouldShowTaskToday(task)).length;
-
   const handleStartEdit = (task) => {
     setEditingTaskId(task.id);
     setEditingTaskText(task.text);
   };
+
   const handleCancelEdit = () => {
     setEditingTaskId(null);
     setEditingTaskText("");
   };
+
   const handleSaveEdit = () => {
     if (editingTaskText.trim()) {
       onEditTask(editingTaskId, editingTaskText.trim());
@@ -162,175 +160,203 @@ const TodayTasksSection = ({
     handleCancelEdit();
   };
 
-  const todayString = getTodayString();
-
   const getRepeatBadge = (task) => {
-    if (!task.repeatType || task.repeatType === "none") return null;
-
-    const badgeClass = "text-xs font-semibold px-2 py-0.5 rounded-full";
-
-    switch (task.repeatType) {
-      case "daily":
-        return (
-          <span className={`${badgeClass} text-green-600 bg-green-100`}>
-            Daily
-          </span>
-        );
-      case "weekly":
-        return (
-          <span className={`${badgeClass} text-blue-600 bg-blue-100`}>
-            Weekly
-          </span>
-        );
-      case "custom": {
-        const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        const selectedDayNames =
-          task.selectedDays?.map((i) => weekDays[i]).join(", ") || "";
-        return (
-          <span className={`${badgeClass} text-purple-600 bg-purple-100`}>
-            {selectedDayNames}
-          </span>
-        );
-      }
-      default:
-        return null;
+    if (task.isDaily || task.repeatType === "daily") {
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-blue-700 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-full border border-blue-200 shadow-sm">
+          <span>📅</span> Daily
+        </span>
+      );
     }
+    if (task.repeatType === "weekly") {
+      const days = task.repeatDays || [];
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 rounded-full border border-purple-200 shadow-sm">
+          <span>🔄</span> Weekly {days.length > 0 ? `(${days.join(", ")})` : ""}
+        </span>
+      );
+    }
+    return null;
   };
 
   return (
-    <section className="mb-8">
-      <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-        <div className="flex flex-col mb-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-900 md:text-3xl flex items-center">
-              Today's Tasks ({remainingTasks})
-              <span className="ml-2 text-base font-normal text-gray-500">
-                {todayString}
+    <section className="relative bg-gradient-to-br from-white via-indigo-50/30 to-purple-50/30 rounded-3xl p-6 sm:p-8 shadow-xl border border-white/50 backdrop-blur-sm overflow-hidden">
+      {/* Decorative Background Elements */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-400/10 to-purple-400/10 rounded-full blur-3xl -z-0" />
+      <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-blue-400/10 to-cyan-400/10 rounded-full blur-3xl -z-0" />
+
+      {/* Content */}
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-gray-900 via-indigo-900 to-purple-900 bg-clip-text text-transparent">
+                Today's Tasks
+              </h2>
+              <span className="text-lg sm:text-xl font-medium text-gray-600">
+                {new Date().toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                })}
+                , {new Date().toLocaleDateString("en-US", { weekday: "short" })}
               </span>
-            </h2>
+            </div>
+            <div className="flex items-center gap-3 text-sm">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur-sm rounded-full text-indigo-700 font-semibold shadow-sm border border-indigo-100">
+                <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+                {remainingTasks} Active
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur-sm rounded-full text-green-700 font-semibold shadow-sm border border-green-100">
+                <span className="text-green-500">✓</span>
+                {completedTasks} Done
+              </span>
+            </div>
           </div>
-          <div className="mt-2">
-            <CountdownTimer />
-          </div>
+          <MobileFilter
+            categories={TASK_CATEGORIES}
+            selectedCategory={selectedCategory}
+            onCategoryChange={onCategoryChange}
+            filterType={filterType}
+            onFilterChange={onFilterChange}
+            sortType={sortType}
+            onSortChange={onSortChange}
+            taskCounts={taskCounts}
+          />
         </div>
 
-        {/* Mobile Filter (replaces Categories and Search) */}
-        <MobileFilter
-          selectedCategory={selectedCategory}
-          onCategoryChange={onCategoryChange}
-          filterType={filterType}
-          onFilterChange={onFilterChange}
-          sortType={sortType}
-          onSortChange={onSortChange}
-          taskCounts={taskCounts}
-        />
-
-        <div className="flex justify-between items-center mb-2">
-          <span></span>
-          <span className="text-lg font-mono text-indigo-600 font-semibold">
-            {progress.toFixed(2)}%
-          </span>
+        {/* Add New Task Button - Top of Section */}
+        <div className="mb-6">
+          <AddTaskForm onAddTask={onAddTask} isTodaySection={true} />
         </div>
-        <ProgressBar percentage={progress} />
-        <ul className="mt-6 space-y-3">
+
+        {/* Progress Bar */}
+        <div className="mb-8">
+          <ProgressBar percentage={progress} />
+        </div>
+
+        {/* Tasks List */}
+        <ul className="space-y-3">
           {visibleTasks.map((task) => (
             <li
               key={task.id}
-              className={`flex items-start sm:items-center group rounded-lg p-3 transition-all ${
-                task.priority === "high"
-                  ? "bg-red-50 border border-red-200"
-                  : "hover:bg-gray-50"
-              }`}
+              className="group relative bg-white/60 backdrop-blur-sm hover:bg-white rounded-2xl transition-all duration-300 border border-gray-200/50 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-100/50"
             >
-              <input
-                type="checkbox"
-                id={task.id}
-                checked={task.completed}
-                onChange={() => onToggleTask(task.id)}
-                className="w-5 h-5 mt-0.5 sm:mt-0 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer flex-shrink-0"
-              />
-              <div className="ml-3 flex-grow min-w-0">
-                {editingTaskId === task.id ? (
-                  <div className="w-full">
-                    <input
-                      type="text"
-                      value={editingTaskText}
-                      onChange={(e) => setEditingTaskText(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
-                      className="w-full text-base border-b-2 border-indigo-200 focus:border-indigo-500 outline-none mb-2"
-                      autoFocus
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleSaveEdit}
-                        className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={handleCancelEdit}
-                        className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full">
-                    <div className="flex items-start sm:items-center justify-between">
-                      <label
-                        htmlFor={task.id}
-                        className={`text-gray-700 text-base cursor-pointer transition-colors flex-grow min-w-0 pr-2 ${
-                          task.completed
-                            ? "line-through text-gray-400"
-                            : "group-hover:text-gray-900"
-                        }`}
-                      >
-                        {task.priority === "high" && (
-                          <span className="text-red-500 mr-2">🔥</span>
-                        )}
-                        <span className="break-words">{task.text}</span>
-                      </label>
-                      {/* Action buttons - always visible on mobile, on hover for desktop */}
-                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <div className="flex items-start p-5">
+                {/* Checkbox */}
+                <div className="flex-shrink-0 pt-1">
+                  <input
+                    type="checkbox"
+                    id={task.id}
+                    checked={task.completed}
+                    onChange={() => onToggleTask(task.id)}
+                    className="w-5 h-5 text-indigo-600 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500/30 cursor-pointer transition-all hover:border-indigo-400 hover:scale-110"
+                  />
+                </div>
+
+                {/* Content */}
+                <div className="ml-4 flex-grow min-w-0">
+                  {editingTaskId === task.id ? (
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={editingTaskText}
+                        onChange={(e) => setEditingTaskText(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
+                        className="w-full text-base text-gray-900 bg-white border-2 border-indigo-400 focus:border-indigo-600 outline-none rounded-xl px-3 py-2 transition-colors"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => handleStartEdit(task)}
-                          className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="Edit task"
+                          onClick={handleSaveEdit}
+                          className="px-5 py-2 text-sm font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
                         >
-                          <PencilIcon className="w-4 h-4" />
+                          Save
                         </button>
                         <button
-                          onClick={() => onDeleteTask(task.id)}
-                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete task"
+                          onClick={handleCancelEdit}
+                          className="px-5 py-2 text-sm font-semibold bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all"
                         >
-                          <TrashIcon className="w-4 h-4" />
+                          Cancel
                         </button>
                       </div>
                     </div>
-                    {/* Badges row */}
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {task.priority === "high" && (
-                        <span className="text-xs font-semibold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
-                          High Priority
-                        </span>
-                      )}
-                      {getRepeatBadge(task)}
-                      {task.category && task.category !== "personal" && (
-                        <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
-                          {TASK_CATEGORIES.find((c) => c.id === task.category)
-                            ?.name || task.category}
-                        </span>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <label
+                          htmlFor={task.id}
+                          className={`text-base leading-relaxed cursor-pointer transition-all flex-grow ${
+                            task.completed
+                              ? "line-through text-gray-400"
+                              : "text-gray-900 font-medium group-hover:text-indigo-900"
+                          }`}
+                        >
+                          {task.priority === "high" && (
+                            <span className="inline-block mr-2 text-base">
+                              🔥
+                            </span>
+                          )}
+                          <span className="break-words">{task.text}</span>
+                        </label>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                          <button
+                            onClick={() => handleStartEdit(task)}
+                            className="p-2.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all hover:scale-110"
+                            title="Edit task"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => onDeleteTask(task.id)}
+                            className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all hover:scale-110"
+                            title="Delete task"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Badges */}
+                      {(task.priority === "high" ||
+                        task.isDaily ||
+                        task.repeatType === "daily" ||
+                        task.repeatType === "weekly" ||
+                        (task.category && task.category !== "personal")) && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {task.priority === "high" && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-red-700 bg-gradient-to-r from-red-50 to-orange-50 rounded-full border border-red-200 shadow-sm">
+                              <span>🔥</span> High Priority
+                            </span>
+                          )}
+                          {getRepeatBadge(task)}
+                          {task.category && task.category !== "personal" && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-50 rounded-full border border-gray-200">
+                              {
+                                TASK_CATEGORIES.find(
+                                  (c) => c.id === task.category
+                                )?.icon
+                              }{" "}
+                              {TASK_CATEGORIES.find(
+                                (c) => c.id === task.category
+                              )?.name || task.category}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </li>
           ))}
         </ul>
-        <AddTaskForm onAddTask={onAddTask} isTodaySection={true} />
+        {/* Add Task Form */}
+        <div className="mt-6">
+          <AddTaskForm onAddTask={onAddTask} isTodaySection={true} />
+        </div>
       </div>
     </section>
   );
@@ -365,15 +391,18 @@ const Week = ({
     setEditingTaskId(topic.id);
     setEditingTaskText(topic.text);
   };
+
   const handleCancelEdit = () => {
     setEditingTaskId(null);
     setEditingTaskText("");
   };
+
   const handleSaveEdit = () => {
     if (editingTaskText.trim())
       onEditTask(editingTaskId, editingTaskText.trim());
     handleCancelEdit();
   };
+
   const handleTitleSave = () => {
     if (newTitle.trim() && newTitle.trim() !== weekData.title)
       onRenameTitle(weekData.week, newTitle.trim());
@@ -381,24 +410,33 @@ const Week = ({
   };
 
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl mb-4 shadow-sm transition-all duration-300 hover:shadow-md">
+    <div className="bg-gradient-to-br from-indigo-50/30 to-purple-50/30 backdrop-blur-sm border-2 border-white/50 rounded-3xl mb-6 shadow-xl transition-all duration-300 hover:shadow-2xl relative overflow-hidden">
+      {/* Decorative blur elements */}
+      <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl -z-10"></div>
+      <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-2xl -z-10"></div>
+
       <div
-        className="w-full p-5 text-left flex justify-between items-center cursor-pointer"
+        className="w-full p-6 text-left flex justify-between items-center cursor-pointer"
         onClick={() => !isEditingTitle && setIsOpen(!isOpen)}
       >
         <div>
-          <div className="text-sm text-gray-500 flex items-center gap-4">
-            <span className="flex items-center">
-              <CalendarIcon className="w-4 h-4 mr-2" />
-              Week {weekData.week} ({weekData.weekInfo.rangeString})
+          <div className="text-sm flex items-center gap-4 flex-wrap">
+            <span className="flex items-center bg-white/60 backdrop-blur-sm px-3 py-1.5 rounded-xl shadow-sm">
+              <CalendarIcon className="w-4 h-4 mr-2 text-indigo-600" />
+              <span className="font-bold text-gray-700">
+                Week {weekData.week}
+              </span>
             </span>
-            <span className="font-semibold text-indigo-500">
+            <span className="text-gray-600 font-medium">
+              {weekData.weekInfo.rangeString}
+            </span>
+            <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
               {weekData.weekInfo.remainingString}
             </span>
           </div>
           {!isEditingTitle ? (
             <div className="flex items-center group">
-              <h3 className="text-lg font-semibold text-gray-900 mt-1">
+              <h3 className="text-xl font-bold text-gray-900 mt-2">
                 {weekData.title}
               </h3>
               <button
@@ -406,25 +444,25 @@ const Week = ({
                   e.stopPropagation();
                   setIsEditingTitle(true);
                 }}
-                className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="ml-3 opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <PencilIcon className="w-4 h-4 text-gray-500 hover:text-indigo-600" />
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-2">
               <input
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 onBlur={handleTitleSave}
                 onKeyDown={(e) => e.key === "Enter" && handleTitleSave()}
-                className="p-1 border-b-2 border-indigo-500 text-lg font-semibold outline-none"
+                className="p-2 border-2 border-indigo-500 rounded-xl text-lg font-bold outline-none bg-white/80 backdrop-blur-sm"
                 autoFocus
               />
               <button
                 onClick={handleTitleSave}
-                className="text-sm text-indigo-600 font-semibold"
+                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition-all"
               >
                 Save
               </button>
@@ -432,20 +470,20 @@ const Week = ({
           )}
         </div>
         <div className="flex items-center space-x-4">
-          <span className="text-sm font-mono text-indigo-600 font-semibold">
+          <span className="text-base font-mono font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-xl shadow-sm">
             {weekProgress.toFixed(2)}%
           </span>
           <ChevronDownIcon
-            className={`w-6 h-6 text-gray-500 transform transition-transform ${
+            className={`w-7 h-7 text-gray-600 transform transition-transform ${
               isOpen ? "rotate-180" : ""
             }`}
           />
         </div>
       </div>
       {isOpen && (
-        <div className="px-5 pb-5">
+        <div className="px-6 pb-6">
           <ProgressBar percentage={weekProgress} />
-          <ul className="mt-4 space-y-4">
+          <ul className="mt-6 space-y-4">
             {weekData.topics.map((topic) => {
               let taskProgress = 0;
               if (topic.type === "book") {
@@ -464,8 +502,11 @@ const Week = ({
                 taskProgress = (completed / total) * 100;
               }
               return (
-                <li key={topic.id} className="p-4 bg-gray-50 rounded-lg group">
-                  <div className="flex justify-between items-center mb-2">
+                <li
+                  key={topic.id}
+                  className="p-5 bg-white/60 backdrop-blur-sm rounded-2xl group shadow-md hover:shadow-lg transition-all border border-white/50"
+                >
+                  <div className="flex justify-between items-center mb-3">
                     {editingTaskId === topic.id ? (
                       <div className="flex items-center gap-2 w-full">
                         <input
@@ -475,18 +516,18 @@ const Week = ({
                           onKeyDown={(e) =>
                             e.key === "Enter" && handleSaveEdit()
                           }
-                          className="flex-grow text-base font-semibold border-b-2 border-indigo-200 focus:border-indigo-500 outline-none"
+                          className="flex-grow text-base font-bold border-2 border-indigo-500 rounded-xl p-2 outline-none bg-white/80 backdrop-blur-sm"
                           autoFocus
                         />
                         <button
                           onClick={handleSaveEdit}
-                          className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                          className="px-4 py-2 text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg transition-all"
                         >
                           Save
                         </button>
                         <button
                           onClick={handleCancelEdit}
-                          className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                          className="px-4 py-2 text-sm bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-xl font-bold hover:shadow-lg transition-all"
                         >
                           Cancel
                         </button>
@@ -503,18 +544,18 @@ const Week = ({
                                   completed: !topic.completed,
                                 });
                               }}
-                              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                              className={`w-6 h-6 rounded-xl border-2 flex items-center justify-center transition-all shadow-sm ${
                                 topic.completed
-                                  ? "bg-green-500 border-green-500 text-white"
-                                  : "border-gray-300 hover:border-indigo-400"
+                                  ? "bg-gradient-to-br from-green-500 to-emerald-500 border-green-400 text-white shadow-lg scale-105"
+                                  : "border-gray-300 hover:border-indigo-400 bg-white"
                               }`}
                             >
                               {topic.completed && (
-                                <CheckCircleIcon className="w-3 h-3" />
+                                <CheckCircleIcon className="w-4 h-4" />
                               )}
                             </button>
                             <h4
-                              className={`font-semibold flex-grow ${
+                              className={`font-bold text-base flex-grow ${
                                 topic.completed
                                   ? "text-gray-500 line-through"
                                   : "text-gray-800"
@@ -524,40 +565,42 @@ const Week = ({
                             </h4>
                           </>
                         ) : (
-                          <h4 className="font-semibold text-gray-800 flex-grow">
+                          <h4 className="font-bold text-base text-gray-800 flex-grow">
                             {topic.text}
                           </h4>
                         )}
                       </div>
                     )}
-                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2 gap-1">
                       <button
                         onClick={() => handleStartEdit(topic)}
-                        className="p-1 text-gray-500 hover:text-indigo-600"
+                        className="p-2 text-gray-500 hover:text-indigo-600 rounded-xl hover:bg-white/80 transition-all"
                       >
                         <PencilIcon className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => onDeleteTask(topic.id)}
-                        className="p-1 text-gray-500 hover:text-red-600"
+                        className="p-2 text-gray-500 hover:text-red-600 rounded-xl hover:bg-white/80 transition-all"
                       >
                         <TrashIcon className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
                   {topic.type !== "simple" && (
-                    <div className="flex justify-between items-center text-sm text-gray-600 mb-2">
-                      <span>{formatProgress(topic)}</span>
-                      <span className="font-mono text-indigo-500 font-semibold">
+                    <div className="flex justify-between items-center text-sm mb-3">
+                      <span className="text-gray-700 font-medium">
+                        {formatProgress(topic)}
+                      </span>
+                      <span className="font-mono font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
                         {taskProgress.toFixed(1)}%
                       </span>
                     </div>
                   )}
                   {topic.type === "simple" ? (
                     <div className="flex items-center gap-3">
-                      <div className="flex-grow text-sm text-gray-600">
+                      <div className="flex-grow text-sm">
                         <span
-                          className={`font-medium ${
+                          className={`font-bold ${
                             topic.completed ? "text-green-600" : "text-gray-600"
                           }`}
                         >
@@ -565,8 +608,8 @@ const Week = ({
                         </span>
                       </div>
                       {topic.completed && (
-                        <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
-                          Completed
+                        <span className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold px-4 py-1.5 rounded-xl shadow-md">
+                          ✓ Completed
                         </span>
                       )}
                     </div>
@@ -577,13 +620,13 @@ const Week = ({
                       </div>
                       <button
                         onClick={() => onOpenProgressModal(topic)}
-                        className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs"
+                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all text-xs font-bold shadow-md hover:shadow-lg hover:scale-105"
                       >
-                        Add Progress
+                        + Add Progress
                       </button>
                       {taskProgress >= 100 && (
-                        <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">
-                          Completed
+                        <span className="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold px-4 py-1.5 rounded-xl shadow-md">
+                          ✓ Completed
                         </span>
                       )}
                     </div>
@@ -592,12 +635,12 @@ const Week = ({
               );
             })}
           </ul>
-          <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="mt-6 pt-6 border-t border-white/20">
             <button
               onClick={() => onOpenNewTaskModal(weekData.week)}
-              className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+              className="w-full flex items-center justify-center gap-3 py-4 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-bold hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-105"
             >
-              <PlusCircleIcon className="w-5 h-5 mr-2" />
+              <PlusCircleIcon className="w-5 h-5" />
               Add New Weekly Task
             </button>
           </div>
@@ -612,11 +655,19 @@ const QuoteSection = ({ quote, onClick }) => {
   return (
     <section className="mb-8">
       <div
-        className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center cursor-pointer select-none"
+        className="bg-gradient-to-br from-indigo-50/30 to-purple-50/30 backdrop-blur-sm rounded-3xl p-8 shadow-xl border-2 border-white/50 text-center cursor-pointer select-none relative overflow-hidden hover:shadow-2xl transition-all duration-300 group"
         onClick={onClick}
       >
-        <p className="text-xl italic text-gray-700">"{quote.text}"</p>
-        <p className="mt-3 font-semibold text-indigo-600">- {quote.author}</p>
+        {/* Decorative blur elements */}
+        <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl -z-10 group-hover:scale-110 transition-transform duration-500"></div>
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-2xl -z-10 group-hover:scale-110 transition-transform duration-500"></div>
+
+        <p className="text-2xl italic text-gray-700 font-medium">
+          "{quote.text}"
+        </p>
+        <p className="mt-4 font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 text-lg">
+          - {quote.author}
+        </p>
       </div>
     </section>
   );
@@ -917,6 +968,7 @@ export default function App() {
   // Refs for various purposes
   const isUserAddingDataRef = useRef(false);
   const syncTimeoutRef = useRef(null);
+  const resetJustPerformedRef = useRef(false);
 
   // State for bottom navigation
   const [activeSection, setActiveSection] = useState("home");
@@ -1566,6 +1618,12 @@ export default function App() {
         return;
       }
 
+      // Skip if reset was already performed in this session
+      if (resetJustPerformedRef.current) {
+        console.log("⏸️ Reset already performed in this session, skipping.");
+        return;
+      }
+
       try {
         resetInProgress = true;
         const today = getDateString();
@@ -1643,9 +1701,13 @@ export default function App() {
               });
           }
 
+          // Mark reset as performed for this session
+          resetJustPerformedRef.current = true;
           console.log("✅ Daily reset completed");
         } else {
           console.log("✅ Tasks already reset for today, no action needed");
+          // Mark reset as performed for this session
+          resetJustPerformedRef.current = true;
         }
       } catch (error) {
         console.error("❌ Daily reset failed:", error);
@@ -3750,18 +3812,22 @@ export default function App() {
               <div className="mb-6">
                 <CountdownTimer />
               </div>
-              <div className="bg-white rounded-2xl p-6 mb-8 shadow-lg border border-gray-100">
+              <div className="bg-gradient-to-br from-indigo-50/30 to-purple-50/30 backdrop-blur-sm rounded-3xl p-8 mb-8 shadow-xl border-2 border-white/50 relative overflow-hidden">
+                {/* Decorative blur elements */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl -z-10"></div>
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-2xl -z-10"></div>
+
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                   <div className="flex-1 flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-900">
+                    <h2 className="text-2xl font-bold text-gray-900">
                       Overall Progress
                     </h2>
-                    <span className="text-lg font-mono text-indigo-600 font-semibold ml-4">
+                    <span className="text-2xl font-mono font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 ml-4 px-6 py-3 bg-white/60 backdrop-blur-sm rounded-2xl shadow-lg">
                       {overallProgress.toFixed(2)}%
                     </span>
                   </div>
                 </div>
-                <div className="mt-4">
+                <div className="mt-6">
                   <ProgressBar percentage={overallProgress} />
                 </div>
               </div>
@@ -3772,16 +3838,18 @@ export default function App() {
             roadmap.phases &&
             roadmap.phases.map((phase, phaseIndex) => (
               <section key={phaseIndex} className="mb-10">
-                <div className="mb-4 flex justify-between items-center gap-2">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 border-l-4 border-indigo-600 pl-4">
+                <div className="mb-6 flex justify-between items-center gap-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-6 shadow-xl">
+                  <div className="flex-1">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-white">
                       {phase.phase}
                     </h2>
-                    <p className="text-gray-600 mt-1 pl-5">{phase.duration}</p>
+                    <p className="text-white/90 mt-2 text-base font-medium">
+                      {phase.duration}
+                    </p>
                   </div>
                   <button
                     onClick={() => setSpanningTaskModalOpen(true)}
-                    className="bg-white border border-indigo-600 text-indigo-600 font-bold p-2 sm:px-4 sm:py-2 rounded-lg hover:bg-indigo-50 transition-colors flex items-center text-sm flex-shrink-0"
+                    className="bg-white text-indigo-600 font-bold px-4 sm:px-6 py-3 rounded-xl hover:shadow-xl transition-all flex items-center text-sm flex-shrink-0 hover:scale-105"
                   >
                     <PlusCircleIcon className="w-5 h-5 sm:mr-2" />
                     <span className="hidden sm:inline">
@@ -3810,18 +3878,22 @@ export default function App() {
               </section>
             ))}
           {activeSection === "progress" && !roadmap && (
-            <div className="text-center py-12 bg-white rounded-2xl shadow-lg border border-gray-100">
-              <h2 className="text-2xl font-bold text-gray-700">
+            <div className="text-center py-16 bg-gradient-to-br from-indigo-50/30 to-purple-50/30 backdrop-blur-sm rounded-3xl shadow-xl border-2 border-white/50 relative overflow-hidden">
+              {/* Decorative blur elements */}
+              <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl -z-10"></div>
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-2xl -z-10"></div>
+
+              <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
                 No Weekly Progress
               </h2>
-              <p className="text-gray-500 mt-2 mb-6">
+              <p className="text-gray-600 mt-3 mb-8 text-lg font-medium">
                 Get started by adding a new weekly plan.
               </p>
               <button
                 onClick={() => setAddWeeksModalOpen(true)}
-                className="bg-indigo-600 text-white font-bold px-5 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center mx-auto"
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold px-8 py-4 rounded-2xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-105 flex items-center mx-auto"
               >
-                <PlusCircleIcon className="w-5 h-5 mr-2" />
+                <PlusCircleIcon className="w-6 h-6 mr-3" />
                 Add Weeks
               </button>
             </div>

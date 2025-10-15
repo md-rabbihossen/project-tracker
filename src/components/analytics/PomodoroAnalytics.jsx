@@ -74,33 +74,40 @@ const ProgressIndicator = ({ current, previous, className = "" }) => {
   );
 };
 
-// Best Record Card Component
+// Best Record Card Component with Beautiful Design
 const BestRecordCard = ({ title, record, color, formatDate }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    className={`bg-white rounded-xl p-4 shadow-sm border ${color} relative overflow-hidden`}
+    className={`bg-white/60 backdrop-blur-sm rounded-2xl p-6 shadow-lg border-2 border-white/50 relative overflow-hidden hover:shadow-xl transition-all`}
   >
-    <div className="absolute top-2 right-2">
-      <div className="text-2xl">🏆</div>
+    <div className="absolute top-3 right-3">
+      <div className="text-3xl">🏆</div>
     </div>
-    <h4 className="font-semibold text-gray-800 mb-2 text-sm">{title}</h4>
+    <h4 className="font-bold text-gray-800 mb-3 text-base">{title}</h4>
     {record.minutes > 0 ? (
       <>
         <div
-          className={`text-2xl font-bold mb-1 ${color
-            .replace("border-", "text-")
+          className={`text-3xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r ${color
+            .replace("border-", "from-")
+            .replace("-200", "-500")} ${color
+            .replace("border-", "to-")
             .replace("-200", "-600")}`}
         >
           {formatDuration(record.minutes)}
         </div>
-        <div className="text-sm text-gray-600 space-y-1">
-          <p>{record.sessions} sessions</p>
-          <p className="text-xs text-gray-500">{formatDate(record)}</p>
+        <div className="text-sm text-gray-700 space-y-1 font-medium">
+          <p className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"></span>
+            {record.sessions} sessions
+          </p>
+          <p className="text-xs text-gray-600">{formatDate(record)}</p>
         </div>
       </>
     ) : (
-      <div className="text-gray-400 text-sm py-2">No record yet</div>
+      <div className="text-gray-400 text-sm py-4 font-medium">
+        No record yet - Start tracking!
+      </div>
     )}
   </motion.div>
 );
@@ -433,7 +440,7 @@ export const PomodoroAnalytics = () => {
     }
   };
 
-  // Progress Goal Component for individual periods
+  // Progress Goal Component for individual periods with Beautiful Design
   const ProgressGoalCard = ({
     type,
     currentMinutes,
@@ -441,10 +448,10 @@ export const PomodoroAnalytics = () => {
     editValue,
     onEditChange,
   }) => (
-    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-0 mb-3">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-          <span className="text-sm text-gray-600 capitalize">
+    <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-5 shadow-lg border-2 border-white/50">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <span className="text-sm text-gray-700 capitalize font-bold">
             {type} Target:
           </span>
           {editingGoals ? (
@@ -468,19 +475,19 @@ export const PomodoroAnalytics = () => {
                       (type === "daily" ? 30 : type === "weekly" ? 180 : 720)
                   )
                 }
-                className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-20 px-3 py-2 text-sm border-2 border-indigo-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm font-bold"
               />
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-700 font-medium">
                 minutes ({formatDuration(editValue)})
               </span>
             </div>
           ) : (
-            <span className="text-sm font-medium text-gray-800">
+            <span className="text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
               {formatDuration(goalMinutes)}
             </span>
           )}
         </div>
-        <span className="text-sm font-medium text-gray-800">
+        <span className="text-sm font-bold text-gray-800">
           {formatDuration(currentMinutes)} / {formatDuration(goalMinutes)}
         </span>
       </div>
@@ -489,11 +496,11 @@ export const PomodoroAnalytics = () => {
         percentage={Math.min((currentMinutes / goalMinutes) * 100, 100)}
       />
 
-      <div className="flex justify-between text-xs text-gray-500 mt-2">
-        <span>
+      <div className="flex justify-between text-xs text-gray-600 mt-3 font-medium">
+        <span className="bg-white/60 px-3 py-1.5 rounded-xl">
           {Math.round((currentMinutes / goalMinutes) * 100)}% complete
         </span>
-        <span>
+        <span className="bg-white/60 px-3 py-1.5 rounded-xl">
           {formatRemainingTime(Math.max(0, goalMinutes - currentMinutes))}{" "}
           remaining
         </span>
@@ -519,25 +526,33 @@ export const PomodoroAnalytics = () => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg border border-gray-100 ${color}`}
+      className={`bg-white/60 backdrop-blur-sm rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-white/50 ${color} relative overflow-hidden hover:shadow-2xl transition-all`}
     >
-      <div className="flex items-start justify-between mb-3 sm:mb-4">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+      {/* Decorative blur element */}
+      <div
+        className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${color
+          .replace("border-", "from-")
+          .replace("-200", "-400/20")} ${color
+          .replace("border-", "to-")
+          .replace("-200", "-500/20")} rounded-full blur-2xl -z-10`}
+      ></div>
+
+      <div className="flex items-start justify-between mb-4 sm:mb-5">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
           <div
-            className={`p-2 sm:p-3 rounded-lg sm:rounded-xl ${color
-              .replace("border-", "bg-")
-              .replace("-200", "-100")}`}
+            className={`p-3 sm:p-4 rounded-2xl shadow-lg bg-white/80 backdrop-blur-sm border border-white/50`}
           >
             <Clock
-              size={20}
-              className={`sm:w-6 sm:h-6 ${color
+              size={24}
+              className={`sm:w-7 sm:h-7 ${color
                 .replace("border-", "text-")
                 .replace("-200", "-600")}`}
+              strokeWidth={2.5}
             />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-gray-800 text-sm sm:text-base">
+              <h3 className="font-bold text-gray-800 text-base sm:text-lg">
                 {title}
               </h3>
               {previousValue !== undefined && (
@@ -548,38 +563,44 @@ export const PomodoroAnalytics = () => {
                 />
               )}
             </div>
-            <p className="text-xs sm:text-sm text-gray-600 truncate">
+            <p className="text-xs sm:text-sm text-gray-600 truncate font-medium">
               {subtitle}
             </p>
           </div>
         </div>
         {trend && (
-          <div className="flex items-center gap-1 text-green-600 flex-shrink-0 ml-2">
-            <TrendingUp size={14} className="sm:w-4 sm:h-4" />
-            <span className="text-xs sm:text-sm font-medium">{trend}</span>
+          <div className="flex items-center gap-1 text-green-600 flex-shrink-0 ml-2 bg-green-50 px-3 py-1.5 rounded-xl">
+            <TrendingUp size={16} className="sm:w-5 sm:h-5" />
+            <span className="text-xs sm:text-sm font-bold">{trend}</span>
           </div>
         )}
       </div>
 
-      <div className="space-y-2">
-        <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
-          <span className="text-2xl sm:text-3xl font-bold text-gray-800">
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-3">
+          <span className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
             {formatDuration(value)}
           </span>
           {previousValue !== undefined && (
-            <span className="text-xs sm:text-sm text-gray-500">
+            <span className="text-xs sm:text-sm text-gray-600 font-medium">
               (prev: {formatDuration(previousValue)})
             </span>
           )}
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs sm:text-sm text-gray-600">
-          <span>{sessions} sessions</span>
-          {value > 0 && <span>{Math.round(value / sessions || 0)}min avg</span>}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-700 font-medium">
+          <span className="bg-white/60 px-3 py-1.5 rounded-xl">
+            {sessions} sessions
+          </span>
+          {value > 0 && (
+            <span className="bg-white/60 px-3 py-1.5 rounded-xl">
+              {Math.round(value / sessions || 0)}min avg
+            </span>
+          )}
         </div>
 
         {/* Progress Goal Section */}
         {showGoal && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="mt-5 pt-5 border-t-2 border-white/30">
             <ProgressGoalCard
               type={goalType}
               currentMinutes={value}
@@ -594,21 +615,24 @@ export const PomodoroAnalytics = () => {
         {Object.keys(labels).length > 0 && (
           <div
             className={`${
-              showGoal ? "mt-3" : "mt-2 sm:mt-3"
-            } pt-2 sm:pt-3 border-t border-gray-100`}
+              showGoal ? "mt-4" : "mt-3 sm:mt-4"
+            } pt-3 sm:pt-4 border-t-2 border-white/30`}
           >
-            <p className="text-xs font-medium text-gray-500 mb-1 sm:mb-2">
+            <p className="text-xs font-bold text-gray-700 mb-2 sm:mb-3">
               Breakdown:
             </p>
-            <div className="space-y-1 max-h-24 sm:max-h-32 overflow-y-auto">
+            <div className="space-y-2 max-h-28 sm:max-h-36 overflow-y-auto">
               {Object.entries(labels)
                 .sort(([, a], [, b]) => b - a)
                 .map(([label, minutes]) => (
-                  <div key={label} className="flex justify-between text-xs">
-                    <span className="text-gray-600 capitalize truncate">
+                  <div
+                    key={label}
+                    className="flex justify-between text-xs bg-white/60 backdrop-blur-sm px-3 py-2 rounded-xl"
+                  >
+                    <span className="text-gray-700 capitalize truncate font-medium">
                       {label}:
                     </span>
-                    <span className="font-medium text-gray-800 flex-shrink-0 ml-1">
+                    <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 flex-shrink-0 ml-2">
                       {formatDuration(minutes)}
                     </span>
                   </div>
@@ -622,168 +646,205 @@ export const PomodoroAnalytics = () => {
 
   return (
     <div className="space-y-6">
-      {/* Enhanced Header */}
+      {/* Enhanced Header with Beautiful Gradient Design */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl p-6 mb-6 text-white relative overflow-hidden"
+        className="bg-gradient-to-br from-indigo-50/30 to-purple-50/30 backdrop-blur-sm rounded-3xl p-8 mb-6 shadow-xl border-2 border-white/50 relative overflow-hidden"
       >
-        <div className="absolute inset-0 bg-black/10 backdrop-blur-sm"></div>
+        {/* Decorative blur elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl -z-10"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-2xl -z-10"></div>
+
         <div className="relative z-10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <Clock size={28} className="text-white" />
+              <div className="p-4 bg-white/60 backdrop-blur-sm rounded-2xl shadow-lg">
+                <Clock
+                  size={32}
+                  className="text-indigo-600"
+                  strokeWidth={2.5}
+                />
               </div>
               <div>
-                <h2 className="text-2xl sm:text-3xl font-bold mb-1">
+                <h2 className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
                   Analytics Dashboard
                 </h2>
-                <p className="text-white/90 text-sm sm:text-base">
+                <p className="text-gray-700 text-base sm:text-lg font-medium mt-1">
                   Comprehensive insights into your productivity journey
                 </p>
               </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className="flex gap-4 text-center">
-              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
-                <div className="text-xl font-bold">
+            {/* Quick Stats with Beautiful Cards */}
+            <div className="flex gap-3 flex-wrap">
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
+                <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
                   {formatDuration(stats.today.minutes)}
                 </div>
-                <div className="text-xs text-white/80">Total Today</div>
+                <div className="text-xs text-gray-700 font-medium mt-1">
+                  Total Today
+                </div>
               </div>
-              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
-                <div className="text-xl font-bold">
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
+                <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
                   {formatDuration(last6HoursStats.minutes)}
                 </div>
-                <div className="text-xs text-white/80">Last 6 Hours</div>
+                <div className="text-xs text-gray-700 font-medium mt-1">
+                  Last 6 Hours
+                </div>
               </div>
-              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
-                <div className="text-xl font-bold">{stats.today.sessions}</div>
-                <div className="text-xs text-white/80">Sessions</div>
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
+                <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
+                  {stats.today.sessions}
+                </div>
+                <div className="text-xs text-gray-700 font-medium mt-1">
+                  Sessions
+                </div>
               </div>
-              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
-                <div className="text-xl font-bold">
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
+                <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-600">
                   {Math.round((stats.today.minutes / goals.dailyMinutes) * 100)}
                   %
                 </div>
-                <div className="text-xs text-white/80">Daily Goal</div>
+                <div className="text-xs text-gray-700 font-medium mt-1">
+                  Daily Goal
+                </div>
               </div>
-              <div className="bg-white/20 rounded-lg p-3 backdrop-blur-sm min-w-[70px]">
-                <div className="text-xl font-bold">
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
+                <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
                   {calculateGrade(
                     Math.round((stats.today.minutes / goals.dailyMinutes) * 100)
                   )}
                 </div>
-                <div className="text-xs text-white/80">Grade</div>
+                <div className="text-xs text-gray-700 font-medium mt-1">
+                  Grade
+                </div>
               </div>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* Action Buttons */}
+      {/* Action Buttons with Beautiful Design */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
         <div className="flex items-center gap-2">
           {!editingGoals ? (
             <button
               onClick={handleEditGoals}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm bg-white/60 backdrop-blur-sm text-indigo-600 rounded-xl hover:bg-white/80 transition-all shadow-md hover:shadow-lg font-bold border border-white/50"
             >
-              <Edit2 size={14} />
+              <Edit2 size={16} />
               Edit Goals
             </button>
           ) : (
             <div className="flex items-center gap-2">
               <button
                 onClick={handleSaveGoals}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all shadow-md hover:shadow-lg font-bold"
               >
-                <Check size={14} />
+                <Check size={16} />
                 Save
               </button>
               <button
                 onClick={handleCancelEdit}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-300 transition-all shadow-md hover:shadow-lg font-bold"
               >
-                <X size={14} />
+                <X size={16} />
                 Cancel
               </button>
             </div>
           )}
           <button
             onClick={() => setShowAddTimeModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-105 font-bold text-sm"
           >
-            <Plus size={18} />
+            <Plus size={20} />
             Add Time
           </button>
         </div>
       </div>
 
-      {/* Enhanced Tabs */}
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
-        <div className="flex border-b border-gray-200 overflow-x-auto bg-gray-50/50">
+      {/* Enhanced Tabs with Beautiful Gradient Design */}
+      <div className="bg-gradient-to-br from-indigo-50/30 to-purple-50/30 backdrop-blur-sm rounded-3xl border-2 border-white/50 overflow-hidden shadow-xl relative">
+        {/* Decorative blur element */}
+        <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-400/10 to-purple-400/10 rounded-full blur-3xl -z-10"></div>
+
+        <div className="flex border-b-2 border-white/30 overflow-x-auto bg-white/20 backdrop-blur-sm">
           {[
             {
               id: "today",
               label: "Today",
               icon: Clock,
-              color: "text-blue-600",
+              color: "from-blue-600 to-indigo-600",
             },
             {
               id: "week",
               label: "This Week",
               icon: TrendingUp,
-              color: "text-green-600",
+              color: "from-green-600 to-emerald-600",
             },
             {
               id: "month",
               label: "This Month",
               icon: Target,
-              color: "text-purple-600",
+              color: "from-purple-600 to-pink-600",
             },
             {
               id: "lifetime",
               label: "Lifetime",
               icon: Clock,
-              color: "text-orange-600",
+              color: "from-orange-600 to-red-600",
             },
             {
               id: "insights",
               label: "Insights",
               icon: TrendingUp,
-              color: "text-pink-600",
+              color: "from-pink-600 to-rose-600",
             },
             {
               id: "advanced",
               label: "Analytics",
               icon: Target,
-              color: "text-indigo-600",
+              color: "from-indigo-600 to-blue-600",
             },
             {
               id: "comparison",
               label: "Compare",
               icon: TrendingUp,
-              color: "text-cyan-600",
+              color: "from-cyan-600 to-blue-600",
             },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all duration-200 whitespace-nowrap relative ${
+              className={`flex items-center gap-2 px-5 py-4 text-sm font-bold border-b-4 transition-all duration-200 whitespace-nowrap relative ${
                 activeTab === tab.id
-                  ? `border-indigo-500 ${tab.color} bg-white shadow-sm`
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-white/50"
+                  ? `border-transparent bg-white/80 backdrop-blur-sm shadow-lg`
+                  : "border-transparent text-gray-600 hover:text-gray-800 hover:bg-white/40"
               }`}
             >
-              <tab.icon size={16} />
-              {tab.label}
+              <tab.icon
+                size={18}
+                className={
+                  activeTab === tab.id
+                    ? `text-transparent bg-clip-text bg-gradient-to-r ${tab.color}`
+                    : ""
+                }
+              />
+              <span
+                className={
+                  activeTab === tab.id
+                    ? `text-transparent bg-clip-text bg-gradient-to-r ${tab.color}`
+                    : ""
+                }
+              >
+                {tab.label}
+              </span>
               {activeTab === tab.id && (
                 <motion.div
                   layoutId="activeTab"
-                  className="absolute inset-0 bg-white rounded-t-lg border-b-2 border-indigo-500 -z-10"
+                  className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${tab.color} rounded-t-full`}
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 />
               )}
@@ -791,7 +852,7 @@ export const PomodoroAnalytics = () => {
           ))}
         </div>
 
-        <div className="p-6">
+        <div className="p-6 bg-white/40 backdrop-blur-sm">
           {/* Today Tab */}
           {activeTab === "today" && (
             <div className="space-y-6">

@@ -16,13 +16,13 @@ export const AddTaskForm = ({ onAddTask, isTodaySection = false }) => {
 
   return (
     <>
-      <div className="mt-4 pt-4 border-t border-gray-100">
+      <div className="mb-4">
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+          className="w-full flex items-center justify-center gap-3 py-4 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-bold hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl hover:scale-105"
         >
-          <PlusCircleIcon className="w-5 h-5 mr-2" />
-          Add Task
+          <PlusCircleIcon className="w-5 h-5" />
+          Add New Task
         </button>
       </div>
 

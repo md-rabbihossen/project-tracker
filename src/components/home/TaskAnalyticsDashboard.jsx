@@ -119,24 +119,30 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
+        className="bg-gradient-to-br from-indigo-50/30 to-purple-50/30 backdrop-blur-sm rounded-3xl p-8 shadow-xl border-2 border-white/50 relative overflow-hidden"
       >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-            <Zap size={20} className="text-indigo-600" />
+        {/* Decorative blur elements */}
+        <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl -z-10"></div>
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-2xl -z-10"></div>
+
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center gap-3">
+            <div className="p-3 bg-white/60 backdrop-blur-sm rounded-2xl shadow-lg">
+              <Zap size={28} className="text-indigo-600" />
+            </div>
             Productivity Score
           </h3>
           <div
-            className={`px-3 py-1 rounded-full text-sm font-medium ${getScoreColor()}`}
+            className={`px-5 py-2.5 rounded-2xl text-base font-bold shadow-lg ${getScoreColor()}`}
           >
             {getScoreLabel()}
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative w-20 h-20">
+        <div className="flex items-center gap-6">
+          <div className="relative w-24 h-24">
             <svg
-              className="w-20 h-20 transform -rotate-90"
+              className="w-24 h-24 transform -rotate-90"
               viewBox="0 0 100 100"
             >
               <circle
@@ -170,15 +176,17 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-xl font-bold text-gray-800">{score}</span>
+              <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
+                {score}
+              </span>
             </div>
           </div>
 
-          <div className="flex-1">
-            <div className="text-sm text-gray-600 space-y-1">
+          <div className="flex-1 bg-white/60 backdrop-blur-sm rounded-2xl p-5 shadow-md border border-white/50">
+            <div className="text-sm text-gray-700 space-y-2 font-medium">
               <div className="flex justify-between">
                 <span>Task Completion:</span>
-                <span className="font-medium">
+                <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
                   {analytics.todayStats.total > 0
                     ? Math.round(
                         (analytics.todayStats.completed /
@@ -191,7 +199,7 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
               </div>
               <div className="flex justify-between">
                 <span>Priority Focus:</span>
-                <span className="font-medium">
+                <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
                   {tasks.filter(
                     (t) => t.priority === "high" && shouldShowTaskToday(t)
                   ).length > 0
@@ -214,7 +222,7 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
               </div>
               <div className="flex justify-between">
                 <span>Consistency:</span>
-                <span className="font-medium">
+                <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-emerald-600">
                   {analytics.streaks.current > 0 ? "Active" : "Start today"}
                 </span>
               </div>

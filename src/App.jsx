@@ -87,8 +87,19 @@ const TodayTasksSection = ({
   const [editingTaskText, setEditingTaskText] = useState("");
 
   // Filter tasks that should be shown today and apply category/filter/sort
+  // Get IDs of completed one-time tasks to exclude from main list
+  const completedOneTimeTaskIds = new Set(
+    completedOneTimeTasks.map((t) => t.id)
+  );
+  console.log("🔍 Exclusion Debug:", {
+    completedOneTimeTaskIdsCount: completedOneTimeTaskIds.size,
+    completedOneTimeTasksLength: completedOneTimeTasks.length,
+    tasksBeforeFilter: tasks.length,
+  });
+
   const todayTasks = tasks
     .filter((task) => shouldShowTaskToday(task))
+    .filter((task) => !completedOneTimeTaskIds.has(task.id)) // Exclude if already in completedOneTimeTasks
     .filter((task) => {
       // Category filter
       if (selectedCategory !== "all" && task.category !== selectedCategory) {
@@ -126,13 +137,60 @@ const TodayTasksSection = ({
     });
 
   const visibleTasks = todayTasks.filter((task) => !task.completed);
-  const completedTasks = todayTasks.filter((task) => task.completed).length;
-  const completedOneTimeTasksCount = completedOneTimeTasks.length;
-  const totalTasks = todayTasks.length + completedOneTimeTasksCount;
-  const totalCompletedTasks = completedTasks + completedOneTimeTasksCount;
+
+  // IMPORTANT: Separate one-time tasks from recurring tasks
+  // One-time tasks should ONLY be counted from completedOneTimeTasks array
+  // Recurring tasks are counted from todayTasks array
+
+  // Get only recurring/repeating tasks from todayTasks
+  const recurringTasksOnly = todayTasks.filter(
+    (task) => task.repeatType && task.repeatType !== "none"
+  );
+
+  // Count completed recurring tasks
+  const completedRecurringTasks = recurringTasksOnly.filter(
+    (task) => task.completed
+  ).length;
+
+  // Filter completed one-time tasks by selected category
+  const filteredCompletedOneTimeTasks = completedOneTimeTasks.filter((task) => {
+    // Apply category filter
+    if (selectedCategory !== "all" && task.category !== selectedCategory) {
+      return false;
+    }
+    return true;
+  });
+
+  const completedOneTimeTasksCount = filteredCompletedOneTimeTasks.length;
+
+  // Total tasks = recurring tasks + completed one-time tasks
+  // (We only show completed one-time tasks, uncompleted ones are in todayTasks)
+  const totalTasks = todayTasks.length + filteredCompletedOneTimeTasks.length;
+  const totalCompletedTasks =
+    completedRecurringTasks + completedOneTimeTasksCount;
   const progress =
     totalTasks > 0 ? (totalCompletedTasks / totalTasks) * 100 : 0;
   const remainingTasks = visibleTasks.length;
+
+  // Debug logging (temporary)
+  const completedOneTimeInTodayTasks = todayTasks.filter(
+    (t) => t.completed && (!t.repeatType || t.repeatType === "none")
+  );
+  console.log("✅ Fixed Count Debug:", {
+    todayTasksTotal: todayTasks.length,
+    recurringOnly: recurringTasksOnly.length,
+    completedRecurring: completedRecurringTasks,
+    completedOneTime: completedOneTimeTasksCount,
+    totalCompleted: totalCompletedTasks,
+    WARNING_oneTimeStillInTodayTasks: completedOneTimeInTodayTasks.length,
+    WARNING_details:
+      completedOneTimeInTodayTasks.length > 0
+        ? completedOneTimeInTodayTasks.map((t) => ({
+            id: t.id,
+            text: t.text.substring(0, 20),
+          }))
+        : "None (good!)",
+  });
 
   // Calculate task counts by category for the filter
   const taskCounts = tasks
@@ -209,7 +267,7 @@ const TodayTasksSection = ({
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur-sm rounded-full text-green-700 font-semibold shadow-sm border border-green-100">
                 <span className="text-green-500">✓</span>
-                {completedTasks} Done
+                {totalCompletedTasks} Done
               </span>
             </div>
           </div>
@@ -1415,7 +1473,18 @@ export default function App() {
         setTodayTasks([]);
       }
 
-      setCompletedOneTimeTasks(storedCompletedOneTimeTasks);
+      // Remove duplicates from completedOneTimeTasks before setting
+      const uniqueCompletedTasks = storedCompletedOneTimeTasks.filter(
+        (task, index, self) => index === self.findIndex((t) => t.id === task.id)
+      );
+      if (uniqueCompletedTasks.length !== storedCompletedOneTimeTasks.length) {
+        console.warn(
+          "🔧 Removed",
+          storedCompletedOneTimeTasks.length - uniqueCompletedTasks.length,
+          "duplicate tasks from completedOneTimeTasks"
+        );
+      }
+      setCompletedOneTimeTasks(uniqueCompletedTasks);
 
       if (storedTodayDailyTasks) {
         setTodayDailyTasks(storedTodayDailyTasks);
@@ -2245,10 +2314,21 @@ export default function App() {
       // If task is being completed and it's a one-time task (no repeat, regardless of priority)
       if (!task.completed && task.repeatType === "none") {
         // Store it as completed one-time task for progress tracking
-        setCompletedOneTimeTasks((prevCompleted) => [
-          ...prevCompleted,
-          { ...task, completed: true, completedAt: new Date().toISOString() },
-        ]);
+        setCompletedOneTimeTasks((prevCompleted) => {
+          // Check if this task is already in the completed list (prevent duplicates)
+          const alreadyExists = prevCompleted.some((t) => t.id === taskId);
+          if (alreadyExists) {
+            console.warn(
+              "⚠️ Task already in completedOneTimeTasks, skipping duplicate:",
+              taskId
+            );
+            return prevCompleted;
+          }
+          return [
+            ...prevCompleted,
+            { ...task, completed: true, completedAt: new Date().toISOString() },
+          ];
+        });
         // Remove it permanently from the main list
         return prev.filter((t) => t.id !== taskId);
       }

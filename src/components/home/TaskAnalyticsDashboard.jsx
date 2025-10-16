@@ -36,16 +36,30 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
       // Productivity score (0-100)
       const completionRate =
         todayTotal > 0 ? (weekCompleted / todayTotal) * 100 : 0;
+
+      // Calculate priority bonus including one-time tasks
       const priorityTasksCompleted = todayTasks.filter(
         (task) => task.priority === "high" && task.completed
       ).length;
-      const totalPriorityTasks = todayTasks.filter(
+      const oneTimeHighPriorityCompleted = completedOneTimeTasks.filter(
         (task) => task.priority === "high"
       ).length;
 
+      const totalPriorityTasks = todayTasks.filter(
+        (task) => task.priority === "high"
+      ).length;
+      const totalOneTimeHighPriority = completedOneTimeTasks.filter(
+        (task) => task.priority === "high"
+      ).length;
+
+      const totalPriorityTasksCount =
+        totalPriorityTasks + totalOneTimeHighPriority;
+      const totalCompletedPriorityTasks =
+        priorityTasksCompleted + oneTimeHighPriorityCompleted;
+
       const priorityBonus =
-        totalPriorityTasks > 0
-          ? (priorityTasksCompleted / totalPriorityTasks) * 20
+        totalPriorityTasksCount > 0
+          ? (totalCompletedPriorityTasks / totalPriorityTasksCount) * 20
           : 0;
 
       const productivityScore = Math.min(
@@ -200,23 +214,32 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
               <div className="flex justify-between">
                 <span>Priority Focus:</span>
                 <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
-                  {tasks.filter(
-                    (t) => t.priority === "high" && shouldShowTaskToday(t)
-                  ).length > 0
-                    ? Math.round(
-                        (tasks.filter(
-                          (t) =>
-                            t.priority === "high" &&
-                            t.completed &&
-                            shouldShowTaskToday(t)
-                        ).length /
-                          tasks.filter(
-                            (t) =>
-                              t.priority === "high" && shouldShowTaskToday(t)
-                          ).length) *
-                          100
-                      )
-                    : 100}
+                  {(() => {
+                    const recurringHighPriority = tasks.filter(
+                      (t) => t.priority === "high" && shouldShowTaskToday(t)
+                    );
+                    const completedRecurringHighPriority = tasks.filter(
+                      (t) =>
+                        t.priority === "high" &&
+                        t.completed &&
+                        shouldShowTaskToday(t)
+                    );
+                    const oneTimeHighPriority = completedOneTimeTasks.filter(
+                      (t) => t.priority === "high"
+                    );
+
+                    const totalHighPriority =
+                      recurringHighPriority.length + oneTimeHighPriority.length;
+                    const completedHighPriority =
+                      completedRecurringHighPriority.length +
+                      oneTimeHighPriority.length;
+
+                    return totalHighPriority > 0
+                      ? Math.round(
+                          (completedHighPriority / totalHighPriority) * 100
+                        )
+                      : 100;
+                  })()}
                   %
                 </span>
               </div>

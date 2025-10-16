@@ -1551,12 +1551,18 @@ export default function App() {
 
   // --- Daily Reset Logic for localStorage-only App ---
   useEffect(() => {
+    // Skip if still loading data
+    if (loading) {
+      console.log("⏸️ Reset check skipped: still loading data");
+      return;
+    }
+
     let resetInProgress = false;
 
     const doLocalStorageResetIfNeeded = () => {
       // Skip if reset already in progress
-      if (resetInProgress || loading) {
-        console.log("⏸️ Reset check skipped:", { resetInProgress, loading });
+      if (resetInProgress) {
+        console.log("⏸️ Reset check skipped: reset in progress");
         return;
       }
 
@@ -1569,11 +1575,13 @@ export default function App() {
           today,
           lastReset,
           needsReset: lastReset !== today,
+          currentTasksCount: todayTasks.length,
         });
 
         if (lastReset !== today) {
-          console.log("🔄 Starting daily reset for localStorage-only app...");
+          console.log("🔄 Starting daily reset...");
           console.log("📊 Before reset - todayTasks count:", todayTasks.length);
+          console.log("📊 todayTasks sample:", todayTasks.slice(0, 2));
 
           // Get current tasks snapshot
           const currentTasks = [...todayTasks];
@@ -1624,8 +1632,9 @@ export default function App() {
           // Sync reset tasks to Supabase
           if (userId) {
             console.log("☁️ Syncing reset tasks to Supabase...");
+            const todayDate = getDateString();
             syncData
-              .saveTodayTasks(resetTasks, [], new Date().toISOString())
+              .saveTodayTasks(resetTasks, [], todayDate)
               .then(() => {
                 console.log("✅ Reset tasks synced to cloud");
               })
@@ -1634,7 +1643,9 @@ export default function App() {
               });
           }
 
-          console.log("✅ Daily reset completed for localStorage-only app");
+          console.log("✅ Daily reset completed");
+        } else {
+          console.log("✅ Tasks already reset for today, no action needed");
         }
       } catch (error) {
         console.error("❌ Daily reset failed:", error);
@@ -1643,7 +1654,7 @@ export default function App() {
       }
     };
 
-    // Initial reset check after a brief delay to ensure everything is loaded
+    // Initial reset check after data is loaded
     const initialTimeout = setTimeout(doLocalStorageResetIfNeeded, 1000);
 
     // Check for reset every hour
@@ -1654,7 +1665,7 @@ export default function App() {
       clearInterval(intervalId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount, interval handles periodic checks
+  }, [loading]); // Run when loading completes
 
   // Manual sync function for testing
   const handleManualSync = async (showAlert = true) => {

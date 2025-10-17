@@ -1,4 +1,4 @@
-export const ProgressBar = ({ percentage }) => {
+export const ProgressBar = ({ percentage, showPercentage = false }) => {
   const displayPercentage = isNaN(percentage)
     ? 0
     : Math.min(100, Math.max(0, percentage));
@@ -11,12 +11,14 @@ export const ProgressBar = ({ percentage }) => {
 
   return (
     <div className="space-y-2">
-      <div className="flex justify-between items-center text-sm">
-        <span className="font-semibold text-gray-700">Overall Progress</span>
-        <span className="font-bold text-indigo-600">
-          {Math.round(displayPercentage)}%
-        </span>
-      </div>
+      {showPercentage && (
+        <div className="flex justify-between items-center text-sm">
+          <span className="font-semibold text-gray-700">Overall Progress</span>
+          <span className="font-bold text-indigo-600">
+            {Math.round(displayPercentage)}%
+          </span>
+        </div>
+      )}
       <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
         <div
           className={`${barColor} h-3 rounded-full transition-all duration-500 ease-out`}

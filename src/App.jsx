@@ -219,21 +219,54 @@ const TodayTasksSection = ({
   };
 
   const getRepeatBadge = (task) => {
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    // 🐛 DEBUG: Log task details for badge rendering
+    console.log("🎯 Badge Debug for task:", {
+      taskId: task.id,
+      taskName: task.text,
+      repeatType: task.repeatType,
+      isDaily: task.isDaily,
+      selectedDays: task.selectedDays,
+      repeatDays: task.repeatDays,
+      fullTask: task,
+    });
+
+    // Check repeatType FIRST before isDaily (because custom/weekly also have isDaily=true)
+    if (task.repeatType === "custom") {
+      const days = (task.selectedDays || task.repeatDays || []).map(
+        (dayIndex) => dayNames[dayIndex]
+      );
+      console.log("✅ Showing CUSTOM badge with days:", days);
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-amber-700 bg-gradient-to-r from-amber-50 to-orange-50 rounded-full border border-amber-200 shadow-sm">
+          <span>⚙️</span> {days.length > 0 ? days.join(", ") : "Custom"}
+        </span>
+      );
+    }
+
+    if (task.repeatType === "weekly") {
+      const days = (task.selectedDays || task.repeatDays || []).map(
+        (dayIndex) => dayNames[dayIndex]
+      );
+      console.log("✅ Showing WEEKLY badge with days:", days);
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 rounded-full border border-purple-200 shadow-sm">
+          <span>🔄</span> {days.length > 0 ? days.join(", ") : "Weekly"}
+        </span>
+      );
+    }
+
     if (task.isDaily || task.repeatType === "daily") {
+      console.log("✅ Showing DAILY badge");
       return (
         <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-blue-700 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-full border border-blue-200 shadow-sm">
           <span>📅</span> Daily
         </span>
       );
     }
-    if (task.repeatType === "weekly") {
-      const days = task.repeatDays || [];
-      return (
-        <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 rounded-full border border-purple-200 shadow-sm">
-          <span>🔄</span> Weekly {days.length > 0 ? `(${days.join(", ")})` : ""}
-        </span>
-      );
-    }
+
+    console.log("❌ No badge condition met - returning null");
     return null;
   };
 
@@ -290,7 +323,7 @@ const TodayTasksSection = ({
 
         {/* Progress Bar */}
         <div className="mb-8">
-          <ProgressBar percentage={progress} />
+          <ProgressBar percentage={progress} showPercentage={true} />
         </div>
 
         {/* Tasks List */}
@@ -2287,6 +2320,13 @@ export default function App() {
 
   const handleAddTodayTask = (taskData) => {
     const today = new Date().getDay();
+
+    // 🐛 DEBUG: Log incoming task data
+    console.log("📥 Adding new task - Input data:", {
+      rawTaskData: taskData,
+      todayDayIndex: today,
+    });
+
     const newTask = {
       text: taskData.text || taskData, // Support both old string format and new object format
       completed: false,
@@ -2303,6 +2343,9 @@ export default function App() {
       category: taskData.category || "personal",
       createdAt: taskData.createdAt || new Date().toISOString(),
     };
+
+    // 🐛 DEBUG: Log created task object
+    console.log("✨ Task created - Final task object:", newTask);
 
     setTodayTasks((prev) => [...prev, newTask]);
   };

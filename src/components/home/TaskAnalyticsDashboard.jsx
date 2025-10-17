@@ -36,7 +36,7 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
       // Productivity score (0-100)
       const completionRate =
         todayTotal > 0 ? (weekCompleted / todayTotal) * 100 : 0;
-
+      
       // Calculate priority bonus including one-time tasks
       const priorityTasksCompleted = todayTasks.filter(
         (task) => task.priority === "high" && task.completed
@@ -44,7 +44,7 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
       const oneTimeHighPriorityCompleted = completedOneTimeTasks.filter(
         (task) => task.priority === "high"
       ).length;
-
+      
       const totalPriorityTasks = todayTasks.filter(
         (task) => task.priority === "high"
       ).length;
@@ -52,10 +52,8 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
         (task) => task.priority === "high"
       ).length;
 
-      const totalPriorityTasksCount =
-        totalPriorityTasks + totalOneTimeHighPriority;
-      const totalCompletedPriorityTasks =
-        priorityTasksCompleted + oneTimeHighPriorityCompleted;
+      const totalPriorityTasksCount = totalPriorityTasks + totalOneTimeHighPriority;
+      const totalCompletedPriorityTasks = priorityTasksCompleted + oneTimeHighPriorityCompleted;
 
       const priorityBonus =
         totalPriorityTasksCount > 0
@@ -227,17 +225,12 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
                     const oneTimeHighPriority = completedOneTimeTasks.filter(
                       (t) => t.priority === "high"
                     );
-
-                    const totalHighPriority =
-                      recurringHighPriority.length + oneTimeHighPriority.length;
-                    const completedHighPriority =
-                      completedRecurringHighPriority.length +
-                      oneTimeHighPriority.length;
-
+                    
+                    const totalHighPriority = recurringHighPriority.length + oneTimeHighPriority.length;
+                    const completedHighPriority = completedRecurringHighPriority.length + oneTimeHighPriority.length;
+                    
                     return totalHighPriority > 0
-                      ? Math.round(
-                          (completedHighPriority / totalHighPriority) * 100
-                        )
+                      ? Math.round((completedHighPriority / totalHighPriority) * 100)
                       : 100;
                   })()}
                   %

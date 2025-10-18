@@ -293,7 +293,7 @@ const TodayTasksSection = ({
                 , {new Date().toLocaleDateString("en-US", { weekday: "short" })}
               </span>
             </div>
-            <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-3 text-sm flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur-sm rounded-full text-indigo-700 font-semibold shadow-sm border border-indigo-100">
                 <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
                 {remainingTasks} Active
@@ -301,6 +301,9 @@ const TodayTasksSection = ({
               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/80 backdrop-blur-sm rounded-full text-green-700 font-semibold shadow-sm border border-green-100">
                 <span className="text-green-500">✓</span>
                 {totalCompletedTasks} Done
+              </span>
+              <span className="text-base font-mono font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-xl shadow-sm border border-indigo-100/50">
+                {Math.round(progress)}%
               </span>
             </div>
           </div>
@@ -635,7 +638,7 @@ const Week = ({
                                   completed: !topic.completed,
                                 });
                               }}
-                              className={`w-6 h-6 rounded-xl border-2 flex items-center justify-center transition-all shadow-sm ${
+                              className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all shadow-sm ${
                                 topic.completed
                                   ? "bg-gradient-to-br from-green-500 to-emerald-500 border-green-400 text-white shadow-lg scale-105"
                                   : "border-gray-300 hover:border-indigo-400 bg-white"

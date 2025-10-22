@@ -28,6 +28,7 @@ import {
   ChevronDownIcon,
   ClockIcon,
   DragHandleIcon,
+  ForwardIcon,
   HomeIcon,
   PencilIcon,
   PlusCircleIcon,
@@ -72,10 +73,12 @@ import "./utils/toastUtils"; // Import to set up global toast function
 const TodayTasksSection = ({
   tasks,
   completedOneTimeTasks = [],
+  skippedTasks = [],
   onAddTask,
   onToggleTask,
   onDeleteTask,
   onEditTask,
+  onSkipTask,
   selectedCategory,
   onCategoryChange,
   filterType,
@@ -91,15 +94,41 @@ const TodayTasksSection = ({
   const completedOneTimeTaskIds = new Set(
     completedOneTimeTasks.map((t) => t.id)
   );
+
+  // Get IDs of tasks skipped today
+  const today = getDateString();
+  const skippedTaskIdsToday = new Set(
+    skippedTasks.filter((st) => st.skipDate === today).map((st) => st.taskId)
+  );
+
   console.log("🔍 Exclusion Debug:", {
     completedOneTimeTaskIdsCount: completedOneTimeTaskIds.size,
     completedOneTimeTasksLength: completedOneTimeTasks.length,
+    skippedTodayCount: skippedTaskIdsToday.size,
+    skippedTasks: skippedTasks.map((st) => ({
+      taskId: st.taskId,
+      skipDate: st.skipDate,
+      taskName: st.taskData?.text,
+      repeatType: st.taskData?.repeatType,
+      selectedDays: st.taskData?.selectedDays,
+    })),
+    todayDate: today,
+    todayDayOfWeek: new Date().getDay(),
     tasksBeforeFilter: tasks.length,
+    tasksWithRepeatInfo: tasks.slice(0, 5).map((t) => ({
+      id: t.id,
+      text: t.text,
+      repeatType: t.repeatType,
+      selectedDays: t.selectedDays,
+      shouldShow: shouldShowTaskToday(t),
+      isSkipped: skippedTaskIdsToday.has(t.id),
+    })),
   });
 
   const todayTasks = tasks
     .filter((task) => shouldShowTaskToday(task))
     .filter((task) => !completedOneTimeTaskIds.has(task.id)) // Exclude if already in completedOneTimeTasks
+    .filter((task) => !skippedTaskIdsToday.has(task.id)) // Exclude if skipped today
     .filter((task) => {
       // Category filter
       if (selectedCategory !== "all" && task.category !== selectedCategory) {
@@ -240,7 +269,7 @@ const TodayTasksSection = ({
       console.log("✅ Showing CUSTOM badge with days:", days);
       return (
         <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-amber-700 bg-gradient-to-r from-amber-50 to-orange-50 rounded-full border border-amber-200 shadow-sm">
-          <span>⚙️</span> {days.length > 0 ? days.join(", ") : "Custom"}
+          <span>📆</span> {days.length > 0 ? days.join(", ") : "Custom"}
         </span>
       );
     }
@@ -396,6 +425,13 @@ const TodayTasksSection = ({
 
                         {/* Action buttons */}
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                          <button
+                            onClick={() => onSkipTask(task.id)}
+                            className="p-2.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all hover:scale-110"
+                            title="Skip for today"
+                          >
+                            <ForwardIcon className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleStartEdit(task)}
                             className="p-2.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all hover:scale-110"
@@ -1070,6 +1106,14 @@ export default function App() {
   const [todayTasks, setTodayTasks] = useState([]);
   const [todayDailyTasks, setTodayDailyTasks] = useState([]);
   const [completedOneTimeTasks, setCompletedOneTimeTasks] = useState([]);
+  const [skippedTasks, setSkippedTasks] = useState(() => {
+    try {
+      const saved = localStorage.getItem("skippedTasks");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [books, setBooks] = useState(getInitialBooks());
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1550,6 +1594,57 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]); // Only reload when user logs in/out
 
+  // Clean up old skipped tasks (remove skips from previous days)
+  useEffect(() => {
+    const today = getDateString();
+
+    setSkippedTasks((prev) => {
+      // Keep only skips from today
+      // Remove skips from yesterday or earlier (different dates)
+      const filtered = prev.filter((st) => st.skipDate === today);
+
+      if (filtered.length !== prev.length) {
+        const removed = prev.filter((st) => st.skipDate !== today);
+        console.log(
+          "🧹 Cleaned up",
+          removed.length,
+          "old skipped tasks:",
+          removed.map((st) => ({
+            task: st.taskData?.text,
+            skipDate: st.skipDate,
+            todayDate: today,
+            repeatType: st.taskData?.repeatType,
+            selectedDays: st.taskData?.selectedDays,
+          }))
+        );
+      }
+      return filtered;
+    });
+
+    // Run cleanup every minute to ensure tasks reappear on date change
+    const intervalId = setInterval(() => {
+      const currentDate = getDateString();
+
+      setSkippedTasks((prev) => {
+        const filtered = prev.filter((st) => st.skipDate === currentDate);
+
+        if (filtered.length !== prev.length) {
+          console.log(
+            "🧹 Auto-cleanup at",
+            new Date().toLocaleTimeString(),
+            "- removed",
+            prev.length - filtered.length,
+            "old skips. Current date:",
+            currentDate
+          );
+        }
+        return filtered;
+      });
+    }, 60000); // Check every minute
+
+    return () => clearInterval(intervalId);
+  }, [activeSection]); // Run when section changes (daily check)
+
   // Refresh today's progress when analytics section is active or when progress is updated
   useEffect(() => {
     if (activeSection === "analytics") {
@@ -1618,6 +1713,7 @@ export default function App() {
           "completedOneTimeTasks",
           JSON.stringify(completedOneTimeTasks)
         );
+        localStorage.setItem("skippedTasks", JSON.stringify(skippedTasks));
         saveBooksToStorage(books);
         localStorage.setItem(
           "todayDailyTasks",
@@ -1697,6 +1793,7 @@ export default function App() {
     roadmap,
     todayTasks,
     completedOneTimeTasks,
+    skippedTasks,
     todayDailyTasks,
     books,
     quoteIndex,
@@ -2400,6 +2497,29 @@ export default function App() {
         task.id === taskId ? { ...task, text: newText } : task
       )
     );
+
+  const handleSkipTask = (taskId) => {
+    const today = getDateString();
+    const task = todayTasks.find((t) => t.id === taskId);
+
+    if (!task) return;
+
+    // Add to skipped tasks with today's date
+    setSkippedTasks((prev) => {
+      // Remove any existing skip entries for this task
+      const filtered = prev.filter((st) => st.taskId !== taskId);
+      return [...filtered, { taskId, skipDate: today, taskData: task }];
+    });
+
+    console.log("⏭️ Task skipped for today:", {
+      taskId,
+      taskName: task.text,
+      skipDate: today,
+      repeatType: task.repeatType,
+      selectedDays: task.selectedDays,
+      isDaily: task.isDaily,
+    });
+  };
 
   const handleConfirmReset = () => {
     localStorage.removeItem("roadmap");
@@ -3906,16 +4026,19 @@ export default function App() {
                 <TaskAnalyticsDashboard
                   tasks={todayTasks}
                   completedOneTimeTasks={completedOneTimeTasks}
+                  skippedTasks={skippedTasks}
                 />
               </div>
 
               <TodayTasksSection
                 tasks={todayTasks}
                 completedOneTimeTasks={completedOneTimeTasks}
+                skippedTasks={skippedTasks}
                 onAddTask={handleAddTodayTask}
                 onToggleTask={handleToggleTodayTask}
                 onDeleteTask={handleDeleteTodayTask}
                 onEditTask={handleEditTodayTask}
+                onSkipTask={handleSkipTask}
                 selectedCategory={selectedCategory}
                 onCategoryChange={setSelectedCategory}
                 filterType={filterType}

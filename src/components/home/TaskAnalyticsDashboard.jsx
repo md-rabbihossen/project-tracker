@@ -1,9 +1,14 @@
 import { motion } from "framer-motion";
 import { Zap } from "lucide-react";
 import { useEffect, useState } from "react";
+import { getDateString } from "../../utils/helpers";
 import { getTodayStats } from "../../utils/pomodoroStats";
 
-const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
+const TaskAnalyticsDashboard = ({
+  tasks,
+  completedOneTimeTasks = [],
+  skippedTasks = [],
+}) => {
   const [analytics, setAnalytics] = useState({
     todayStats: { completed: 0, pending: 0, total: 0 },
     weekStats: { completed: 0, pending: 0, total: 0 },
@@ -22,8 +27,18 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
       const pomodoroStats = getTodayStats();
       const todayActualMinutes = pomodoroStats.minutes || 0;
 
-      // Today's stats
-      const todayTasks = tasks.filter((task) => shouldShowTaskToday(task));
+      // Get skipped task IDs for today
+      const todayDateString = getDateString();
+      const skippedTaskIdsToday = new Set(
+        skippedTasks
+          .filter((st) => st.skipDate === todayDateString)
+          .map((st) => st.taskId)
+      );
+
+      // Today's stats - exclude skipped tasks
+      const todayTasks = tasks.filter(
+        (task) => shouldShowTaskToday(task) && !skippedTaskIdsToday.has(task.id)
+      );
       const todayCompleted = todayTasks.filter((task) => task.completed).length;
       const todayPending = todayTasks.length - todayCompleted;
       const todayTotal = todayTasks.length + completedOneTimeTasks.length;
@@ -36,7 +51,7 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
       // Productivity score (0-100)
       const completionRate =
         todayTotal > 0 ? (weekCompleted / todayTotal) * 100 : 0;
-      
+
       // Calculate priority bonus including one-time tasks
       const priorityTasksCompleted = todayTasks.filter(
         (task) => task.priority === "high" && task.completed
@@ -44,7 +59,7 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
       const oneTimeHighPriorityCompleted = completedOneTimeTasks.filter(
         (task) => task.priority === "high"
       ).length;
-      
+
       const totalPriorityTasks = todayTasks.filter(
         (task) => task.priority === "high"
       ).length;
@@ -52,8 +67,10 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
         (task) => task.priority === "high"
       ).length;
 
-      const totalPriorityTasksCount = totalPriorityTasks + totalOneTimeHighPriority;
-      const totalCompletedPriorityTasks = priorityTasksCompleted + oneTimeHighPriorityCompleted;
+      const totalPriorityTasksCount =
+        totalPriorityTasks + totalOneTimeHighPriority;
+      const totalCompletedPriorityTasks =
+        priorityTasksCompleted + oneTimeHighPriorityCompleted;
 
       const priorityBonus =
         totalPriorityTasksCount > 0
@@ -94,7 +111,7 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
     };
 
     calculateAnalytics();
-  }, [tasks, completedOneTimeTasks]);
+  }, [tasks, completedOneTimeTasks, skippedTasks]);
 
   const shouldShowTaskToday = (task) => {
     const today = new Date();
@@ -213,24 +230,42 @@ const TaskAnalyticsDashboard = ({ tasks, completedOneTimeTasks = [] }) => {
                 <span>Priority Focus:</span>
                 <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
                   {(() => {
+                    // Get skipped task IDs for today
+                    const todayDateString = getDateString();
+                    const skippedTaskIdsToday = new Set(
+                      skippedTasks
+                        .filter((st) => st.skipDate === todayDateString)
+                        .map((st) => st.taskId)
+                    );
+
+                    // Filter out skipped tasks from high priority calculation
                     const recurringHighPriority = tasks.filter(
-                      (t) => t.priority === "high" && shouldShowTaskToday(t)
+                      (t) => 
+                        t.priority === "high" && 
+                        shouldShowTaskToday(t) &&
+                        !skippedTaskIdsToday.has(t.id)
                     );
                     const completedRecurringHighPriority = tasks.filter(
                       (t) =>
                         t.priority === "high" &&
                         t.completed &&
-                        shouldShowTaskToday(t)
+                        shouldShowTaskToday(t) &&
+                        !skippedTaskIdsToday.has(t.id)
                     );
                     const oneTimeHighPriority = completedOneTimeTasks.filter(
                       (t) => t.priority === "high"
                     );
-                    
-                    const totalHighPriority = recurringHighPriority.length + oneTimeHighPriority.length;
-                    const completedHighPriority = completedRecurringHighPriority.length + oneTimeHighPriority.length;
-                    
+
+                    const totalHighPriority =
+                      recurringHighPriority.length + oneTimeHighPriority.length;
+                    const completedHighPriority =
+                      completedRecurringHighPriority.length +
+                      oneTimeHighPriority.length;
+
                     return totalHighPriority > 0
-                      ? Math.round((completedHighPriority / totalHighPriority) * 100)
+                      ? Math.round(
+                          (completedHighPriority / totalHighPriority) * 100
+                        )
                       : 100;
                   })()}
                   %

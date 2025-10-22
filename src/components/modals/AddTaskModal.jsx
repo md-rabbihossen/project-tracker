@@ -149,13 +149,12 @@ export const AddTaskModal = ({ isOpen, onClose, onAddTask }) => {
           >
             <option value="none">📌 One Time Task</option>
             <option value="daily">📅 Daily</option>
-            <option value="weekly">📆 Weekly (Select Days)</option>
-            <option value="custom">⚙️ Custom Days</option>
+            <option value="custom">📆 Custom Days</option>
           </select>
         </div>
 
-        {/* Day Selection for Weekly/Custom */}
-        {(repeatType === "weekly" || repeatType === "custom") && (
+        {/* Day Selection for Custom */}
+        {repeatType === "custom" && (
           <div className="bg-indigo-50 p-4 rounded-xl border-2 border-indigo-100">
             <label className="block text-sm font-semibold text-indigo-900 mb-3">
               📍 Select Days

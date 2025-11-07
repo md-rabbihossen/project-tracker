@@ -42,7 +42,6 @@ import { Modal } from "./components/common/Modal";
 import { ProgressBar } from "./components/common/ProgressBar";
 import { AddTaskForm } from "./components/forms/AddTaskForm";
 import { AddGoalModal } from "./components/goals/GoalComponents";
-import TaskAnalyticsDashboard from "./components/home/TaskAnalyticsDashboard";
 import { CustomToaster } from "./components/notifications/ToastNotifications";
 import { CountdownTimer } from "./components/sections/CountdownTimer";
 import { PomodoroTimer } from "./components/timer/PomodoroTimer";
@@ -4020,15 +4019,6 @@ export default function App() {
                 quote={quotes[quoteIndex]}
                 onClick={handleNextQuote}
               />
-
-              {/* Enhanced Task Analytics Dashboard */}
-              <div className="mb-8">
-                <TaskAnalyticsDashboard
-                  tasks={todayTasks}
-                  completedOneTimeTasks={completedOneTimeTasks}
-                  skippedTasks={skippedTasks}
-                />
-              </div>
 
               <TodayTasksSection
                 tasks={todayTasks}

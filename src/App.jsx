@@ -817,8 +817,15 @@ const RecordsSection = ({
 
   // Create today's record dynamically
   const today = getDateString();
-  const todayCompletedRecurring = todayTasks.filter((t) => t.completed).length;
-  const todayTotal = todayTasks.length + completedOneTimeTasks.length;
+
+  // Filter tasks that should show today (excluding skipped tasks)
+  const todayVisibleTasks = todayTasks.filter((task) =>
+    shouldShowTaskToday(task)
+  );
+  const todayCompletedRecurring = todayVisibleTasks.filter(
+    (t) => t.completed
+  ).length;
+  const todayTotal = todayVisibleTasks.length + completedOneTimeTasks.length;
   const todayCompleted = todayCompletedRecurring + completedOneTimeTasks.length;
   const todayRemaining = Math.max(0, todayTotal - todayCompleted);
   const todayProgress =
@@ -834,6 +841,12 @@ const RecordsSection = ({
   };
 
   console.log("📊 Today's Record (live):", todayRecord);
+  console.log("📊 Task counts:", {
+    allTodayTasks: todayTasks.length,
+    visibleTodayTasks: todayVisibleTasks.length,
+    completedOneTime: completedOneTimeTasks.length,
+    calculatedTotal: todayTotal,
+  });
 
   // Combine today's record with historical records
   const allRecords = [todayRecord, ...(records || [])];

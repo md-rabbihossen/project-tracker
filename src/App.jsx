@@ -807,20 +807,92 @@ const RecordsSection = ({
   records,
   todayTasks = [],
   completedOneTimeTasks = [],
+  skippedTasks = [],
 }) => {
+  const [manualCleanupRunning, setManualCleanupRunning] = useState(false);
+
+  const handleManualCleanup = async () => {
+    if (
+      !confirm(
+        "This will delete ALL historical records and start fresh. Continue?"
+      )
+    ) {
+      return;
+    }
+
+    setManualCleanupRunning(true);
+    console.log("🔴 MANUAL CLEANUP INITIATED");
+
+    try {
+      // Clear localStorage
+      localStorage.removeItem("recordsCleanupV2Done");
+      localStorage.removeItem("recordsCleanupV3Done");
+      localStorage.setItem("dailyTaskRecords", "[]");
+
+      // Delete from Supabase
+      const recordsToDelete = records || [];
+      console.log(`Deleting ${recordsToDelete.length} records from cloud...`);
+
+      for (const record of recordsToDelete) {
+        try {
+          await syncData.deleteDailyRecord(record.date);
+          console.log(`✅ Deleted: ${record.date}`);
+        } catch (err) {
+          console.warn(`⚠️ Failed to delete: ${record.date}`, err);
+        }
+      }
+
+      console.log("✅ Manual cleanup complete! Reloading page...");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (error) {
+      console.error("❌ Manual cleanup failed:", error);
+      alert("Cleanup failed. Check console for details.");
+      setManualCleanupRunning(false);
+    }
+  };
+
   console.log("📊 RecordsSection Debug:", {
     recordsReceived: records,
     recordsCount: records?.length || 0,
     todayTasksCount: todayTasks.length,
     completedOneTimeCount: completedOneTimeTasks.length,
+    skippedTasksCount: skippedTasks.length,
+    recordsDetails: records?.map((r) => ({
+      date: r.date,
+      total: r.total,
+      completed: r.completed,
+      remaining: r.remaining,
+    })),
   });
 
   // Create today's record dynamically
   const today = getDateString();
 
+  // Get skipped task IDs for today
+  const todayDateString = getDateString();
+  const skippedTaskIdsToday = new Set(
+    skippedTasks
+      .filter((st) => st.skipDate === todayDateString)
+      .map((st) => st.taskId)
+  );
+
+  console.log("📊 Today's calculation DETAILED:", {
+    todayDate: today,
+    allTodayTasks: todayTasks.length,
+    skippedCount: skippedTaskIdsToday.size,
+    skippedTaskIds: Array.from(skippedTaskIdsToday),
+    tasksBeforeFilter: todayTasks.map((t) => ({
+      id: t.id,
+      text: t.text.substring(0, 20),
+      completed: t.completed,
+    })),
+  });
+
   // Filter tasks that should show today (excluding skipped tasks)
-  const todayVisibleTasks = todayTasks.filter((task) =>
-    shouldShowTaskToday(task)
+  const todayVisibleTasks = todayTasks.filter(
+    (task) => shouldShowTaskToday(task) && !skippedTaskIdsToday.has(task.id)
   );
   const todayCompletedRecurring = todayVisibleTasks.filter(
     (t) => t.completed
@@ -862,7 +934,16 @@ const RecordsSection = ({
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 7);
 
+  // TEMP FIX: If cleanup hasn't run, only show today's record
+  const cleanupDone = localStorage.getItem("recordsCleanupV3Done");
+  const displayRecords = cleanupDone ? sortedRecords : [todayRecord];
+
   console.log("📊 Final sorted records:", sortedRecords);
+  console.log("📊 Display records (after cleanup filter):", displayRecords);
+  console.log("📊 Cleanup status:", {
+    cleanupDone,
+    showingOnlyToday: !cleanupDone,
+  });
 
   const getDayName = (dateString) => {
     const date = new Date(dateString);
@@ -898,11 +979,71 @@ const RecordsSection = ({
           <p className="text-sm text-gray-600 ml-11">
             Track your daily progress and consistency
           </p>
+
+          {/* Info banner about historical records cleanup */}
+          {!localStorage.getItem("recordsCleanupV3Done") && (
+            <div className="mt-4 ml-11 p-4 bg-red-50 border-2 border-red-300 rounded-lg text-sm">
+              <div className="font-bold text-red-800 mb-2">
+                🔴 ATTENTION: Data Cleanup Required (V3)
+              </div>
+              <div className="text-red-700 space-y-2">
+                <p>
+                  <strong>
+                    Historical records contain incorrect counts (weekly tasks on
+                    wrong days).
+                  </strong>
+                </p>
+                <p>Currently showing ONLY today's live record. To fix:</p>
+                <ol className="list-decimal ml-5 space-y-1">
+                  <li>Refresh the page - cleanup will run automatically</li>
+                  <li>Or click the button below to force cleanup now</li>
+                </ol>
+                <button
+                  onClick={handleManualCleanup}
+                  disabled={manualCleanupRunning}
+                  className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-bold rounded-lg transition-colors"
+                >
+                  {manualCleanupRunning
+                    ? "🔄 Cleaning up..."
+                    : "🗑️ Clean Up Records Now"}
+                </button>
+                <p className="mt-2 text-xs">
+                  After cleanup, historical records will rebuild with correct
+                  counts day by day.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {localStorage.getItem("recordsCleanupV3Done") && (
+            <div className="mt-4 ml-11 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold">✅ Cleanup Complete:</span>{" "}
+                  All records now exclude skipped tasks correctly. Historical
+                  records will rebuild accurately over the next 7 days.
+                </div>
+                <button
+                  onClick={handleManualCleanup}
+                  disabled={manualCleanupRunning}
+                  className="ml-4 px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white text-xs font-bold rounded-lg transition-colors whitespace-nowrap"
+                >
+                  {manualCleanupRunning
+                    ? "🔄 Cleaning..."
+                    : "🗑️ Re-clean Records"}
+                </button>
+              </div>
+              <p className="text-xs mt-2">
+                If you still see incorrect totals in old records, click
+                "Re-clean Records" to delete them.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Records Grid */}
         <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {sortedRecords.length === 0 ? (
+          {displayRecords.length === 0 ? (
             <div className="col-span-full bg-white/70 backdrop-blur-sm rounded-2xl p-8 text-center shadow-md border-2 border-gray-200/50">
               <div className="flex flex-col items-center gap-3">
                 <div className="text-6xl">📊</div>
@@ -919,7 +1060,7 @@ const RecordsSection = ({
               </div>
             </div>
           ) : (
-            sortedRecords.map((record) => {
+            displayRecords.map((record) => {
               const progress = Math.round(record.progress || 0);
               const isToday = record.date === getDateString();
 
@@ -1009,20 +1150,20 @@ const RecordsSection = ({
         </div>
 
         {/* Summary Stats */}
-        {sortedRecords.length > 0 && (
+        {displayRecords.length > 0 && (
           <div className="relative z-10 mt-6 pt-6 border-t border-gray-200/50">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="text-center bg-white/60 backdrop-blur-sm rounded-xl p-3">
                 <div className="text-2xl font-bold text-indigo-600">
-                  {sortedRecords.filter((r) => r.progress === 100).length}
+                  {displayRecords.filter((r) => r.progress === 100).length}
                 </div>
                 <div className="text-xs text-gray-600">Perfect Days</div>
               </div>
               <div className="text-center bg-white/60 backdrop-blur-sm rounded-xl p-3">
                 <div className="text-2xl font-bold text-green-600">
                   {Math.round(
-                    sortedRecords.reduce((sum, r) => sum + r.completed, 0) /
-                      sortedRecords.length
+                    displayRecords.reduce((sum, r) => sum + r.completed, 0) /
+                      displayRecords.length
                   )}
                 </div>
                 <div className="text-xs text-gray-600">Avg Completed</div>
@@ -1030,8 +1171,8 @@ const RecordsSection = ({
               <div className="text-center bg-white/60 backdrop-blur-sm rounded-xl p-3">
                 <div className="text-2xl font-bold text-blue-600">
                   {Math.round(
-                    sortedRecords.reduce((sum, r) => sum + r.progress, 0) /
-                      sortedRecords.length
+                    displayRecords.reduce((sum, r) => sum + r.progress, 0) /
+                      displayRecords.length
                   )}
                   %
                 </div>
@@ -1039,7 +1180,7 @@ const RecordsSection = ({
               </div>
               <div className="text-center bg-white/60 backdrop-blur-sm rounded-xl p-3">
                 <div className="text-2xl font-bold text-purple-600">
-                  {sortedRecords.reduce((sum, r) => sum + r.completed, 0)}
+                  {displayRecords.reduce((sum, r) => sum + r.completed, 0)}
                 </div>
                 <div className="text-xs text-gray-600">Total Done</div>
               </div>
@@ -1633,12 +1774,63 @@ export default function App() {
                   "🔄 Cloud tasks are from previous day, applying reset logic..."
                 );
 
+                // Try to get yesterday's skipped tasks from temporary storage
+                let yesterdaySkippedTaskIds = new Set();
+
+                try {
+                  const savedYesterdaySkips = localStorage.getItem(
+                    "yesterdaySkippedTasks"
+                  );
+                  if (savedYesterdaySkips) {
+                    const yesterdaySkips = JSON.parse(savedYesterdaySkips);
+                    yesterdaySkippedTaskIds = new Set(
+                      yesterdaySkips
+                        .filter((st) => st.skipDate === lastResetDate)
+                        .map((st) => st.taskId)
+                    );
+                    console.log(
+                      "📥 Cloud sync - Loaded yesterday's skipped tasks:",
+                      yesterdaySkippedTaskIds.size
+                    );
+                  }
+                } catch (err) {
+                  console.warn(
+                    "⚠️ Cloud sync - Failed to load yesterday's skipped tasks:",
+                    err
+                  );
+                }
+
+                // Filter tasks that were actually visible yesterday (scheduled for that day + not skipped)
+                const yesterdayVisibleTasks = tasks.filter((task) => {
+                  // Exclude skipped tasks
+                  if (yesterdaySkippedTaskIds.has(task.id)) return false;
+
+                  // Include one-time tasks
+                  if (!task.isDaily) return true;
+
+                  // For recurring tasks, check if they were scheduled for yesterday
+                  if (task.repeatType === "daily") return true;
+
+                  if (
+                    task.repeatType === "custom" &&
+                    task.selectedDays?.length > 0
+                  ) {
+                    // Get yesterday's day index (0=Sun, 1=Mon, ..., 6=Sat)
+                    const yesterdayDate = new Date(lastResetDate);
+                    const yesterdayDayIndex = yesterdayDate.getDay();
+                    return task.selectedDays.includes(yesterdayDayIndex);
+                  }
+
+                  return false;
+                });
+
                 // Save yesterday's record before resetting
-                const completedRecurringCount = tasks.filter(
+                const completedRecurringCount = yesterdayVisibleTasks.filter(
                   (t) => t.completed
                 ).length;
                 const totalTasks =
-                  tasks.length + (completedOneTimeTasks?.length || 0);
+                  yesterdayVisibleTasks.length +
+                  (completedOneTimeTasks?.length || 0);
                 const completedTotal =
                   completedRecurringCount +
                   (completedOneTimeTasks?.length || 0);
@@ -1658,6 +1850,15 @@ export default function App() {
                   "💾 Saving yesterday's record during cloud sync:",
                   yesterdayRecord
                 );
+                console.log("📊 Cloud sync - Yesterday's record calculation:", {
+                  allTasks: tasks.length,
+                  skippedTasks: yesterdaySkippedTaskIds.size,
+                  visibleTasks: yesterdayVisibleTasks.length,
+                  completedRecurring: completedRecurringCount,
+                  completedOneTime: completedOneTimeTasks?.length || 0,
+                  total: totalTasks,
+                  yesterdayDate: lastResetDate,
+                });
 
                 // Save to Supabase
                 try {
@@ -1823,11 +2024,27 @@ export default function App() {
                 console.log(
                   `✅ Loading ${cloudRecords.length} daily records from cloud`
                 );
-                setDailyRecords(cloudRecords);
-                localStorage.setItem(
-                  "dailyTaskRecords",
-                  JSON.stringify(cloudRecords)
+
+                // Check if we need to clear old records (before the fix was applied)
+                const needsCleanup = !localStorage.getItem(
+                  "recordsCleanupV2Done"
                 );
+
+                if (needsCleanup) {
+                  console.log(
+                    "⚠️ Cleanup flag not set - will clear these cloud records after load"
+                  );
+                  // Don't set the records yet - let cleanup handle it
+                  // Store temporarily for cleanup to delete
+                  window._oldRecordsToDelete = cloudRecords;
+                } else {
+                  // Cleanup already done, these are good records
+                  setDailyRecords(cloudRecords);
+                  localStorage.setItem(
+                    "dailyTaskRecords",
+                    JSON.stringify(cloudRecords)
+                  );
+                }
                 hasAnyCloudData = true;
               }
             } catch (error) {
@@ -1987,11 +2204,147 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]); // Only reload when user logs in/out
 
+  // ONE-TIME CLEANUP: Clear historical records that were calculated incorrectly
+  // This runs once to remove old records that included skipped tasks in their counts
+  useEffect(() => {
+    const cleanupFlag = localStorage.getItem("recordsCleanupV2Done"); // V2 - more aggressive
+
+    if (!cleanupFlag && !loading) {
+      console.log(
+        "🧹 ONE-TIME CLEANUP V2: Aggressively clearing ALL old records"
+      );
+
+      // Get records from either state or temp storage
+      const recordsToDelete = window._oldRecordsToDelete || dailyRecords || [];
+      console.log("📊 Old records being cleared:", recordsToDelete.length);
+
+      // Clear ALL records (including today - it will be recalculated live)
+      const emptyRecords = [];
+
+      setDailyRecords(emptyRecords);
+      localStorage.setItem("dailyTaskRecords", JSON.stringify(emptyRecords));
+
+      // Clear from Supabase if user is logged in
+      if (userId && recordsToDelete.length > 0) {
+        console.log(
+          "☁️ Clearing",
+          recordsToDelete.length,
+          "records from cloud database"
+        );
+
+        // Delete ALL records for this user from cloud
+        recordsToDelete.forEach((record, index) => {
+          setTimeout(() => {
+            syncData
+              .deleteDailyRecord(record.date)
+              .then(() => {
+                console.log(
+                  `✅ Deleted record ${index + 1}/${recordsToDelete.length}: ${
+                    record.date
+                  }`
+                );
+              })
+              .catch((err) => {
+                console.warn(
+                  "⚠️ Failed to delete record from cloud:",
+                  record.date,
+                  err
+                );
+              });
+          }, index * 100); // Stagger requests to avoid rate limits
+        });
+      }
+
+      // Clean up temp storage
+      delete window._oldRecordsToDelete;
+
+      // Mark V2 cleanup as done
+      localStorage.setItem("recordsCleanupV2Done", "true");
+      localStorage.removeItem("recordsCleanupV1Done"); // Remove old flag
+      console.log("✅ AGGRESSIVE cleanup completed - ALL records cleared!");
+      console.log(
+        "💡 Fresh records will be built from scratch with correct calculations"
+      );
+      console.log(
+        "📅 Today's record will appear live, historical records will build day by day"
+      );
+    }
+  }, [loading, dailyRecords, userId]);
+
+  // V3 Cleanup: Fix records created before weekly task filtering was added
+  // This removes records that incorrectly included weekly tasks on non-scheduled days
+  useEffect(() => {
+    const cleanupV3Flag = localStorage.getItem("recordsCleanupV3Done");
+
+    if (!cleanupV3Flag && !loading && userId) {
+      console.log(
+        "🧹 ONE-TIME CLEANUP V3: Removing records with incorrect weekly task counts (day name vs day index bug)"
+      );
+
+      // Delete all existing records (they have wrong counts due to day name vs index mismatch)
+      const recordsToDelete = dailyRecords || [];
+      console.log("📊 Records to clear:", recordsToDelete.length);
+
+      if (recordsToDelete.length > 0) {
+        // Clear from localStorage
+        setDailyRecords([]);
+        localStorage.setItem("dailyTaskRecords", "[]");
+        console.log("✅ Cleared localStorage records");
+
+        // Clear from Supabase
+        console.log(
+          "☁️ Deleting",
+          recordsToDelete.length,
+          "records from Supabase..."
+        );
+        recordsToDelete.forEach((record, index) => {
+          setTimeout(() => {
+            syncData
+              .deleteDailyRecord(record.date)
+              .then(() => {
+                console.log(
+                  `✅ Deleted V3: ${record.date} (had total: ${record.total}, should match scheduled tasks for that day)`
+                );
+              })
+              .catch((err) => {
+                console.warn("⚠️ Failed to delete record:", record.date, err);
+              });
+          }, index * 150);
+        });
+      }
+
+      // Mark V3 cleanup as done
+      localStorage.setItem("recordsCleanupV3Done", "true");
+      console.log(
+        "✅ V3 Cleanup complete! New records will use day indices (0-6) instead of day names for filtering"
+      );
+    }
+  }, [loading, dailyRecords, userId]);
+
   // Clean up old skipped tasks (remove skips from previous days)
+  // BUT FIRST: Save yesterday's skipped task info before cleanup for the reset logic
   useEffect(() => {
     const today = getDateString();
 
     setSkippedTasks((prev) => {
+      // IMPORTANT: Before cleaning up, save yesterday's skip data for the reset to use
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayDate = getDateString(yesterday);
+
+      const yesterdaySkips = prev.filter((st) => st.skipDate === yesterdayDate);
+      if (yesterdaySkips.length > 0) {
+        // Store yesterday's skips temporarily for the reset logic to access
+        localStorage.setItem(
+          "yesterdaySkippedTasks",
+          JSON.stringify(yesterdaySkips)
+        );
+        console.log(
+          "💾 Saved yesterday's skipped tasks for reset:",
+          yesterdaySkips.length
+        );
+      }
+
       // Keep only skips from today
       // Remove skips from yesterday or earlier (different dates)
       const filtered = prev.filter((st) => st.skipDate === today);
@@ -2258,11 +2611,64 @@ export default function App() {
 
           // Save yesterday's task record before resetting (only if lastReset exists)
           if (lastReset) {
-            const completedRecurringTasks = currentTasks.filter(
+            // Try to get yesterday's skipped tasks from temporary storage
+            // (saved by the cleanup effect before it deleted them)
+            let yesterdaySkippedTaskIds = new Set();
+
+            try {
+              const savedYesterdaySkips = localStorage.getItem(
+                "yesterdaySkippedTasks"
+              );
+              if (savedYesterdaySkips) {
+                const yesterdaySkips = JSON.parse(savedYesterdaySkips);
+                yesterdaySkippedTaskIds = new Set(
+                  yesterdaySkips
+                    .filter((st) => st.skipDate === lastReset)
+                    .map((st) => st.taskId)
+                );
+                console.log(
+                  "📥 Loaded yesterday's skipped tasks from storage:",
+                  yesterdaySkippedTaskIds.size
+                );
+
+                // Clean up the temporary storage after using it
+                localStorage.removeItem("yesterdaySkippedTasks");
+              } else {
+                console.log("ℹ️ No yesterday skipped tasks found in storage");
+              }
+            } catch (err) {
+              console.warn("⚠️ Failed to load yesterday's skipped tasks:", err);
+            }
+
+            // Filter tasks that were actually visible yesterday (scheduled for that day + not skipped)
+            const yesterdayVisibleTasks = currentTasks.filter((task) => {
+              // Exclude skipped tasks
+              if (yesterdaySkippedTaskIds.has(task.id)) return false;
+
+              // Include one-time tasks
+              if (!task.isDaily) return true;
+
+              // For recurring tasks, check if they were scheduled for yesterday
+              if (task.repeatType === "daily") return true;
+
+              if (
+                task.repeatType === "custom" &&
+                task.selectedDays?.length > 0
+              ) {
+                // Get yesterday's day index (0=Sun, 1=Mon, ..., 6=Sat)
+                const yesterdayDate = new Date(lastReset);
+                const yesterdayDayIndex = yesterdayDate.getDay();
+                return task.selectedDays.includes(yesterdayDayIndex);
+              }
+
+              return false;
+            });
+
+            const completedRecurringTasks = yesterdayVisibleTasks.filter(
               (t) => t.completed
             ).length;
             const totalTasks =
-              currentTasks.length + completedOneTimeTasks.length;
+              yesterdayVisibleTasks.length + completedOneTimeTasks.length;
             const remainingTasks = Math.max(
               0,
               totalTasks -
@@ -2282,6 +2688,16 @@ export default function App() {
               total: totalTasks,
               progress: progressPercentage,
             };
+
+            console.log("📊 Yesterday's record calculation:", {
+              allTasks: currentTasks.length,
+              skippedTasks: yesterdaySkippedTaskIds.size,
+              visibleTasks: yesterdayVisibleTasks.length,
+              completedRecurring: completedRecurringTasks,
+              completedOneTime: completedOneTimeTasks.length,
+              total: totalTasks,
+              yesterdayDate: lastReset,
+            });
 
             console.log("💾 Saving yesterday's record:", yesterdayRecord);
 
@@ -4557,6 +4973,7 @@ export default function App() {
                 records={dailyRecords}
                 todayTasks={todayTasks}
                 completedOneTimeTasks={completedOneTimeTasks}
+                skippedTasks={skippedTasks}
               />
             </>
           )}

@@ -326,8 +326,8 @@ export const PomodoroAnalytics = () => {
     setEditingGoals(false);
   };
 
-  const handleAddTime = (hours, minutes, label) => {
-    addManualTime(hours, minutes, label);
+  const handleAddTime = (hours, minutes, label, sessionCount = 1) => {
+    addManualTime(hours, minutes, label, sessionCount);
     // Force immediate refresh after adding time
     setTimeout(() => {
       loadStats();
@@ -455,30 +455,48 @@ export const PomodoroAnalytics = () => {
             {type} Target:
           </span>
           {editingGoals ? (
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={
-                  type === "daily" ? "30" : type === "weekly" ? "180" : "720"
-                }
-                max={
-                  type === "daily"
-                    ? "1440"
-                    : type === "weekly"
-                    ? "10080"
-                    : "43200"
-                }
-                value={Math.round(editValue)}
-                onChange={(e) =>
-                  onEditChange(
-                    parseInt(e.target.value) ||
-                      (type === "daily" ? 30 : type === "weekly" ? 180 : 720)
-                  )
-                }
-                className="w-20 px-3 py-2 text-sm border-2 border-indigo-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm font-bold"
-              />
-              <span className="text-sm text-gray-700 font-medium">
-                minutes ({formatDuration(editValue)})
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex flex-col">
+                  <label className="text-xs text-gray-600 mb-1">Hours</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={
+                      type === "daily"
+                        ? "24"
+                        : type === "weekly"
+                        ? "168"
+                        : "720"
+                    }
+                    value={Math.floor(editValue / 60)}
+                    onChange={(e) => {
+                      const hours = parseInt(e.target.value) || 0;
+                      const currentMinutes = editValue % 60;
+                      onEditChange(hours * 60 + currentMinutes);
+                    }}
+                    className="w-16 px-2 py-2 text-sm border-2 border-indigo-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm font-bold text-center"
+                  />
+                </div>
+                <span className="text-lg text-gray-400 mt-5">:</span>
+                <div className="flex flex-col">
+                  <label className="text-xs text-gray-600 mb-1">Minutes</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={editValue % 60}
+                    onChange={(e) => {
+                      const mins = parseInt(e.target.value) || 0;
+                      const currentHours = Math.floor(editValue / 60);
+                      onEditChange(currentHours * 60 + Math.min(59, mins));
+                    }}
+                    className="w-16 px-2 py-2 text-sm border-2 border-indigo-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white/80 backdrop-blur-sm font-bold text-center"
+                  />
+                </div>
+              </div>
+              <span className="text-xs text-gray-600 font-medium sm:ml-2">
+                (Total: {formatDuration(editValue)})
               </span>
             </div>
           ) : (
@@ -593,7 +611,7 @@ export const PomodoroAnalytics = () => {
           </span>
           {value > 0 && (
             <span className="bg-white/60 px-3 py-1.5 rounded-xl">
-              {Math.round(value / sessions || 0)}min avg
+              {formatRemainingTime(Math.round(value / sessions || 0))} avg
             </span>
           )}
         </div>

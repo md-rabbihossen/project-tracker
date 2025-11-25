@@ -802,6 +802,242 @@ const QuoteSection = ({ quote, onClick }) => {
   );
 };
 
+// Records Section Component - Shows last 7 days task history
+const RecordsSection = ({
+  records,
+  todayTasks = [],
+  completedOneTimeTasks = [],
+}) => {
+  console.log("📊 RecordsSection Debug:", {
+    recordsReceived: records,
+    recordsCount: records?.length || 0,
+    todayTasksCount: todayTasks.length,
+    completedOneTimeCount: completedOneTimeTasks.length,
+  });
+
+  // Create today's record dynamically
+  const today = getDateString();
+  const todayCompletedRecurring = todayTasks.filter((t) => t.completed).length;
+  const todayTotal = todayTasks.length + completedOneTimeTasks.length;
+  const todayCompleted = todayCompletedRecurring + completedOneTimeTasks.length;
+  const todayRemaining = Math.max(0, todayTotal - todayCompleted);
+  const todayProgress =
+    todayTotal > 0 ? (todayCompleted / todayTotal) * 100 : 0;
+
+  const todayRecord = {
+    date: today,
+    completed: todayCompleted,
+    remaining: todayRemaining,
+    total: todayTotal,
+    progress: todayProgress,
+    isLive: true, // Flag to indicate this is live data
+  };
+
+  console.log("📊 Today's Record (live):", todayRecord);
+
+  // Combine today's record with historical records
+  const allRecords = [todayRecord, ...(records || [])];
+
+  // Remove duplicate if today's date already exists in historical records
+  const uniqueRecords = allRecords.filter(
+    (record, index, self) =>
+      index === self.findIndex((r) => r.date === record.date)
+  );
+
+  // Sort records by date (newest first) and take last 7
+  const sortedRecords = uniqueRecords
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 7);
+
+  console.log("📊 Final sorted records:", sortedRecords);
+
+  const getDayName = (dateString) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (dateString === getDateString()) return "Today";
+    if (dateString === getDateString(yesterday)) return "Yesterday";
+
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  return (
+    <section className="mb-8">
+      <div className="bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/30 rounded-3xl p-6 sm:p-8 shadow-xl border border-white/50 backdrop-blur-sm overflow-hidden relative">
+        {/* Decorative Background Elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-400/10 to-indigo-400/10 rounded-full blur-3xl -z-0" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-indigo-400/10 to-purple-400/10 rounded-full blur-3xl -z-0" />
+
+        {/* Header */}
+        <div className="relative z-10 mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <CalendarIcon className="w-8 h-8 text-indigo-600" />
+            <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-gray-900 via-indigo-900 to-blue-900 bg-clip-text text-transparent">
+              Last 7 Days Records
+            </h2>
+          </div>
+          <p className="text-sm text-gray-600 ml-11">
+            Track your daily progress and consistency
+          </p>
+        </div>
+
+        {/* Records Grid */}
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {sortedRecords.length === 0 ? (
+            <div className="col-span-full bg-white/70 backdrop-blur-sm rounded-2xl p-8 text-center shadow-md border-2 border-gray-200/50">
+              <div className="flex flex-col items-center gap-3">
+                <div className="text-6xl">📊</div>
+                <h3 className="text-xl font-bold text-gray-700">
+                  Getting Started
+                </h3>
+                <p className="text-sm text-gray-600 max-w-md">
+                  Add some tasks and start completing them! Your progress will
+                  appear here automatically.
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Check the browser console (F12) for debugging information
+                </p>
+              </div>
+            </div>
+          ) : (
+            sortedRecords.map((record) => {
+              const progress = Math.round(record.progress || 0);
+              const isToday = record.date === getDateString();
+
+              return (
+                <div
+                  key={record.date}
+                  className={`bg-white/70 backdrop-blur-sm rounded-2xl p-5 shadow-md hover:shadow-lg transition-all duration-300 border-2 ${
+                    isToday
+                      ? "border-indigo-300 ring-2 ring-indigo-100"
+                      : "border-gray-200/50 hover:border-indigo-200"
+                  }`}
+                >
+                  {/* Date Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span
+                      className={`text-sm font-bold ${
+                        isToday ? "text-indigo-600" : "text-gray-700"
+                      }`}
+                    >
+                      {getDayName(record.date)}
+                    </span>
+                    {isToday && (
+                      <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full">
+                        Today
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Task Stats */}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Completed:</span>
+                      <span className="text-sm font-bold text-green-600">
+                        {record.completed}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Remaining:</span>
+                      <span className="text-sm font-bold text-orange-600">
+                        {record.remaining}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Total:</span>
+                      <span className="text-sm font-bold text-gray-700">
+                        {record.total}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Progress</span>
+                      <span className="text-sm font-bold text-indigo-600">
+                        {progress}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div
+                        className={`h-2.5 rounded-full transition-all duration-500 ${
+                          progress === 100
+                            ? "bg-gradient-to-r from-green-500 to-emerald-500"
+                            : progress >= 75
+                            ? "bg-gradient-to-r from-blue-500 to-indigo-500"
+                            : progress >= 50
+                            ? "bg-gradient-to-r from-indigo-500 to-purple-500"
+                            : "bg-gradient-to-r from-orange-500 to-red-500"
+                        }`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Achievement Badge */}
+                  {progress === 100 && (
+                    <div className="mt-3 text-center">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold rounded-full shadow-md">
+                        <span>🎉</span> Perfect Day!
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Summary Stats */}
+        {sortedRecords.length > 0 && (
+          <div className="relative z-10 mt-6 pt-6 border-t border-gray-200/50">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="text-center bg-white/60 backdrop-blur-sm rounded-xl p-3">
+                <div className="text-2xl font-bold text-indigo-600">
+                  {sortedRecords.filter((r) => r.progress === 100).length}
+                </div>
+                <div className="text-xs text-gray-600">Perfect Days</div>
+              </div>
+              <div className="text-center bg-white/60 backdrop-blur-sm rounded-xl p-3">
+                <div className="text-2xl font-bold text-green-600">
+                  {Math.round(
+                    sortedRecords.reduce((sum, r) => sum + r.completed, 0) /
+                      sortedRecords.length
+                  )}
+                </div>
+                <div className="text-xs text-gray-600">Avg Completed</div>
+              </div>
+              <div className="text-center bg-white/60 backdrop-blur-sm rounded-xl p-3">
+                <div className="text-2xl font-bold text-blue-600">
+                  {Math.round(
+                    sortedRecords.reduce((sum, r) => sum + r.progress, 0) /
+                      sortedRecords.length
+                  )}
+                  %
+                </div>
+                <div className="text-xs text-gray-600">Avg Progress</div>
+              </div>
+              <div className="text-center bg-white/60 backdrop-blur-sm rounded-xl p-3">
+                <div className="text-2xl font-bold text-purple-600">
+                  {sortedRecords.reduce((sum, r) => sum + r.completed, 0)}
+                </div>
+                <div className="text-xs text-gray-600">Total Done</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
+
 function ProfileMenu({
   onImport,
   onExport,
@@ -1076,6 +1312,18 @@ function AddEditBookModal({ isOpen, onClose, onSave, editingBook }) {
   );
 }
 
+// Helper function to filter completedOneTimeTasks to only include today's tasks
+const filterTodayCompletedTasks = (completedOneTimeTasks) => {
+  const todayDateString = new Date().toDateString();
+  return (completedOneTimeTasks || []).filter((task) => {
+    if (task.completedAt) {
+      const completedDate = new Date(task.completedAt).toDateString();
+      return completedDate === todayDateString;
+    }
+    return false;
+  });
+};
+
 // Main App Component
 export default function App() {
   // Supabase sync hook - NOW WITH REAL-TIME SYNC! 🚀
@@ -1138,6 +1386,22 @@ export default function App() {
   const [quoteIndex, setQuoteIndex] = useState(() => {
     const saved = localStorage.getItem("quoteIndex");
     return saved ? parseInt(saved, 10) : 0;
+  });
+
+  // State for daily task records (last 7 days)
+  const [dailyRecords, setDailyRecords] = useState(() => {
+    try {
+      const saved = localStorage.getItem("dailyTaskRecords");
+      const records = saved ? JSON.parse(saved) : [];
+      console.log("📊 Initialized dailyRecords from localStorage:", {
+        count: records.length,
+        records: records,
+      });
+      return records;
+    } catch (error) {
+      console.error("❌ Failed to load dailyRecords from localStorage:", error);
+      return [];
+    }
   });
 
   // Enhanced features state
@@ -1356,6 +1620,48 @@ export default function App() {
                   "🔄 Cloud tasks are from previous day, applying reset logic..."
                 );
 
+                // Save yesterday's record before resetting
+                const completedRecurringCount = tasks.filter(
+                  (t) => t.completed
+                ).length;
+                const totalTasks =
+                  tasks.length + (completedOneTimeTasks?.length || 0);
+                const completedTotal =
+                  completedRecurringCount +
+                  (completedOneTimeTasks?.length || 0);
+                const remainingTasks = Math.max(0, totalTasks - completedTotal);
+                const progressPercentage =
+                  totalTasks > 0 ? (completedTotal / totalTasks) * 100 : 0;
+
+                const yesterdayRecord = {
+                  date: lastResetDate,
+                  completed: completedTotal,
+                  remaining: remainingTasks,
+                  total: totalTasks,
+                  progress: progressPercentage,
+                };
+
+                console.log(
+                  "💾 Saving yesterday's record during cloud sync:",
+                  yesterdayRecord
+                );
+
+                // Save to Supabase
+                try {
+                  await syncData.saveDailyRecord(
+                    lastResetDate,
+                    yesterdayRecord.completed,
+                    yesterdayRecord.remaining,
+                    yesterdayRecord.total,
+                    yesterdayRecord.progress
+                  );
+                  console.log(
+                    "✅ Yesterday's record synced to cloud during reset"
+                  );
+                } catch (err) {
+                  console.error("❌ Failed to sync yesterday's record:", err);
+                }
+
                 // Keep uncompleted tasks
                 const uncompletedTasks = tasks.filter((t) => !t.completed);
 
@@ -1402,12 +1708,39 @@ export default function App() {
                 hasAnyCloudData = true;
               } else {
                 // Tasks are already reset for today, just load them
-                setTodayTasks(tasks || []);
-                setCompletedOneTimeTasks(completedOneTimeTasks || []);
-                localStorage.setItem("todayTasks", JSON.stringify(tasks || []));
+                // But filter completedOneTimeTasks to only include tasks completed today
+                const validCompletedTasks = filterTodayCompletedTasks(
+                  completedOneTimeTasks
+                );
+
+                // Also clean todayTasks of any completed one-time tasks
+                const cleanedTasks = (tasks || []).filter((task) => {
+                  if (task.completed && task.repeatType === "none") {
+                    console.warn(
+                      "🔧 Removing completed one-time task from cloud data:",
+                      task.text
+                    );
+                    return false;
+                  }
+                  return true;
+                });
+
+                console.log("✅ Filtered cloud data:", {
+                  originalCompletedOneTime: completedOneTimeTasks?.length || 0,
+                  validCompletedOneTime: validCompletedTasks.length,
+                  originalTasks: tasks?.length || 0,
+                  cleanedTasks: cleanedTasks.length,
+                });
+
+                setTodayTasks(cleanedTasks);
+                setCompletedOneTimeTasks(validCompletedTasks);
+                localStorage.setItem(
+                  "todayTasks",
+                  JSON.stringify(cleanedTasks)
+                );
                 localStorage.setItem(
                   "completedOneTimeTasks",
-                  JSON.stringify(completedOneTimeTasks || [])
+                  JSON.stringify(validCompletedTasks)
                 );
                 if (lastResetDate) {
                   localStorage.setItem("todayTasksLastReset", lastResetDate);
@@ -1468,6 +1801,27 @@ export default function App() {
                 JSON.stringify(cloudData.goals)
               );
               hasAnyCloudData = true;
+            }
+
+            // Load daily records from cloud
+            try {
+              const cloudRecords = await syncData.getDailyRecords(30);
+              if (cloudRecords && cloudRecords.length > 0) {
+                console.log(
+                  `✅ Loading ${cloudRecords.length} daily records from cloud`
+                );
+                setDailyRecords(cloudRecords);
+                localStorage.setItem(
+                  "dailyTaskRecords",
+                  JSON.stringify(cloudRecords)
+                );
+                hasAnyCloudData = true;
+              }
+            } catch (error) {
+              console.error(
+                "❌ Failed to load daily records from cloud:",
+                error
+              );
             }
 
             console.log("✅ Data loaded from Supabase");
@@ -1547,23 +1901,50 @@ export default function App() {
       }
 
       if (storedTodayTasks) {
-        setTodayTasks(storedTodayTasks);
+        // Filter out any completed one-time tasks that shouldn't be in todayTasks
+        const cleanedTasks = storedTodayTasks.filter((task) => {
+          // If it's a completed one-time task, it should be in completedOneTimeTasks, not here
+          if (task.completed && task.repeatType === "none") {
+            console.warn(
+              "🔧 Removing completed one-time task from todayTasks:",
+              task.text
+            );
+            return false;
+          }
+          return true;
+        });
+
+        if (cleanedTasks.length !== storedTodayTasks.length) {
+          // Update localStorage with cleaned data
+          localStorage.setItem("todayTasks", JSON.stringify(cleanedTasks));
+        }
+
+        setTodayTasks(cleanedTasks);
       } else {
         setTodayTasks([]);
       }
 
-      // Remove duplicates from completedOneTimeTasks before setting
+      // Remove duplicates and old tasks from completedOneTimeTasks before setting
       const uniqueCompletedTasks = storedCompletedOneTimeTasks.filter(
         (task, index, self) => index === self.findIndex((t) => t.id === task.id)
       );
-      if (uniqueCompletedTasks.length !== storedCompletedOneTimeTasks.length) {
+
+      const validCompletedTasks =
+        filterTodayCompletedTasks(uniqueCompletedTasks);
+
+      if (validCompletedTasks.length !== storedCompletedOneTimeTasks.length) {
         console.warn(
           "🔧 Removed",
-          storedCompletedOneTimeTasks.length - uniqueCompletedTasks.length,
-          "duplicate tasks from completedOneTimeTasks"
+          storedCompletedOneTimeTasks.length - validCompletedTasks.length,
+          "duplicate or old tasks from completedOneTimeTasks"
+        );
+        // Update localStorage with cleaned data
+        localStorage.setItem(
+          "completedOneTimeTasks",
+          JSON.stringify(validCompletedTasks)
         );
       }
-      setCompletedOneTimeTasks(uniqueCompletedTasks);
+      setCompletedOneTimeTasks(validCompletedTasks);
 
       if (storedTodayDailyTasks) {
         setTodayDailyTasks(storedTodayDailyTasks);
@@ -1720,6 +2101,7 @@ export default function App() {
         );
         localStorage.setItem("quoteIndex", quoteIndex.toString());
         localStorage.setItem("userGoals", JSON.stringify(goals));
+        localStorage.setItem("dailyTaskRecords", JSON.stringify(dailyRecords));
         console.log("💾 Data auto-saved to localStorage");
 
         // 2. Sync to Supabase (cloud backup) 🌩️ - Use direct syncData calls
@@ -1736,8 +2118,12 @@ export default function App() {
         if (todayTasks && todayTasks.length > 0) {
           console.log("  ✅ Adding", todayTasks.length, "tasks to sync queue");
           const today = getDateString();
+          const validCompletedTasks = filterTodayCompletedTasks(
+            completedOneTimeTasks
+          );
+
           syncPromises.push(
-            syncData.saveTodayTasks(todayTasks, completedOneTimeTasks, today)
+            syncData.saveTodayTasks(todayTasks, validCompletedTasks, today)
           );
         } else {
           console.log("  ⏭️ Skipping tasks (empty or null)");
@@ -1797,6 +2183,7 @@ export default function App() {
     books,
     quoteIndex,
     goals,
+    dailyRecords,
     loading,
     userId,
     // NOTE: Sync functions deliberately excluded to prevent infinite loops
@@ -1812,7 +2199,7 @@ export default function App() {
 
     let resetInProgress = false;
 
-    const doLocalStorageResetIfNeeded = () => {
+    const doLocalStorageResetIfNeeded = async () => {
       // Skip if reset already in progress
       if (resetInProgress) {
         console.log("⏸️ Reset check skipped: reset in progress");
@@ -1835,15 +2222,122 @@ export default function App() {
           lastReset,
           needsReset: lastReset !== today,
           currentTasksCount: todayTasks.length,
+          resetJustPerformed: resetJustPerformedRef.current,
         });
+
+        // Reset the flag if the date has actually changed
+        if (lastReset !== today && resetJustPerformedRef.current) {
+          console.log("📅 Date changed! Resetting the resetJustPerformed flag");
+          resetJustPerformedRef.current = false;
+        }
 
         if (lastReset !== today) {
           console.log("🔄 Starting daily reset...");
           console.log("📊 Before reset - todayTasks count:", todayTasks.length);
+          console.log(
+            "📊 Before reset - completedOneTimeTasks count:",
+            completedOneTimeTasks.length
+          );
           console.log("📊 todayTasks sample:", todayTasks.slice(0, 2));
 
           // Get current tasks snapshot
           const currentTasks = [...todayTasks];
+
+          // Save yesterday's task record before resetting (only if lastReset exists)
+          if (lastReset) {
+            const completedRecurringTasks = currentTasks.filter(
+              (t) => t.completed
+            ).length;
+            const totalTasks =
+              currentTasks.length + completedOneTimeTasks.length;
+            const remainingTasks = Math.max(
+              0,
+              totalTasks -
+                (completedRecurringTasks + completedOneTimeTasks.length)
+            );
+            const progressPercentage =
+              totalTasks > 0
+                ? ((completedRecurringTasks + completedOneTimeTasks.length) /
+                    totalTasks) *
+                  100
+                : 0;
+
+            const yesterdayRecord = {
+              date: lastReset,
+              completed: completedRecurringTasks + completedOneTimeTasks.length,
+              remaining: remainingTasks,
+              total: totalTasks,
+              progress: progressPercentage,
+            };
+
+            console.log("💾 Saving yesterday's record:", yesterdayRecord);
+
+            // Get existing records and add the new one
+            const existingRecords = dailyRecords || [];
+            console.log("📚 Existing records count:", existingRecords.length);
+
+            // Check if record for this date already exists
+            const existingRecordIndex = existingRecords.findIndex(
+              (r) => r.date === lastReset
+            );
+            let updatedRecords;
+
+            if (existingRecordIndex >= 0) {
+              // Update existing record
+              updatedRecords = [...existingRecords];
+              updatedRecords[existingRecordIndex] = yesterdayRecord;
+              console.log("📝 Updated existing record for", lastReset);
+            } else {
+              // Add new record
+              updatedRecords = [...existingRecords, yesterdayRecord];
+              console.log("➕ Added new record for", lastReset);
+            }
+
+            // Keep only last 30 days (for storage efficiency)
+            const last30Records = updatedRecords
+              .sort((a, b) => new Date(b.date) - new Date(a.date))
+              .slice(0, 30);
+
+            console.log("💾 Total records after update:", last30Records.length);
+            console.log("💾 Records to save:", last30Records);
+
+            setDailyRecords(last30Records);
+            localStorage.setItem(
+              "dailyTaskRecords",
+              JSON.stringify(last30Records)
+            );
+            console.log("✅ Record saved to state and localStorage");
+
+            // Sync record to Supabase (make it synchronous to ensure it completes)
+            console.log("🔍 Checking userId for Supabase sync:", {
+              userId: userId ? userId.substring(0, 8) + "..." : "null",
+              hasUserId: !!userId,
+            });
+
+            if (userId) {
+              console.log("☁️ Syncing daily record to Supabase...");
+              try {
+                await syncData.saveDailyRecord(
+                  lastReset,
+                  yesterdayRecord.completed,
+                  yesterdayRecord.remaining,
+                  yesterdayRecord.total,
+                  yesterdayRecord.progress
+                );
+                console.log("✅ Daily record synced to cloud");
+              } catch (err) {
+                console.error("❌ Failed to sync daily record:", err);
+              }
+            } else {
+              console.warn(
+                "⚠️ No userId, skipping Supabase sync for daily record"
+              );
+            }
+          } else {
+            console.log(
+              "⏭️ No lastReset date, skipping record save (first run)"
+            );
+          }
 
           // Keep uncompleted tasks
           const uncompletedTasks = currentTasks.filter((t) => !t.completed);
@@ -1953,8 +2447,12 @@ export default function App() {
       if (todayTasks && todayTasks.length > 0) {
         console.log("  ✅ Syncing", todayTasks.length, "tasks...");
         const today = getDateString();
+        const validCompletedTasks = filterTodayCompletedTasks(
+          completedOneTimeTasks
+        );
+
         promises.push(
-          syncData.saveTodayTasks(todayTasks, completedOneTimeTasks, today)
+          syncData.saveTodayTasks(todayTasks, validCompletedTasks, today)
         );
       } else {
         console.log(
@@ -2705,10 +3203,14 @@ export default function App() {
 
               if (importedData.todayTasks !== undefined) {
                 const today = getDateString();
+                const validCompletedTasks = filterTodayCompletedTasks(
+                  importedData.completedOneTimeTasks || []
+                );
+
                 syncPromises.push(
                   syncData.saveTodayTasks(
                     importedData.todayTasks,
-                    importedData.completedOneTimeTasks || [],
+                    validCompletedTasks,
                     today
                   )
                 );
@@ -4035,6 +4537,13 @@ export default function App() {
                 onFilterChange={setFilterType}
                 sortType={sortType}
                 onSortChange={setSortType}
+              />
+
+              {/* Records Section - Last 7 Days */}
+              <RecordsSection
+                records={dailyRecords}
+                todayTasks={todayTasks}
+                completedOneTimeTasks={completedOneTimeTasks}
               />
             </>
           )}

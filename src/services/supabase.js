@@ -187,6 +187,94 @@ export const syncData = {
   },
 
   // =====================================================
+  // DAILY RECORDS SYNC (Task Completion History)
+  // =====================================================
+  async saveDailyRecord(recordDate, completed, remaining, total, progress) {
+    try {
+      const userId = generateUserId();
+      console.log("🔄 Saving daily record to Supabase:", {
+        userId,
+        recordDate,
+        completed,
+        remaining,
+        total,
+        progress,
+      });
+
+      const { data, error } = await supabase.from("daily_records").upsert(
+        {
+          user_id: userId,
+          record_date: recordDate,
+          completed: completed,
+          remaining: remaining,
+          total: total,
+          progress: progress,
+        },
+        { onConflict: "user_id,record_date" }
+      );
+
+      if (error) {
+        console.error("❌ Supabase upsert error:", error);
+        throw error;
+      }
+      console.log("✅ Daily record synced to cloud", data);
+      return data;
+    } catch (error) {
+      console.error("❌ Error saving daily record:", error);
+      throw error;
+    }
+  },
+
+  async getDailyRecords(limit = 30) {
+    try {
+      const userId = generateUserId();
+      const { data, error } = await supabase
+        .from("daily_records")
+        .select("record_date, completed, remaining, total, progress")
+        .eq("user_id", userId)
+        .order("record_date", { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error("Error fetching daily records:", error);
+        return [];
+      }
+
+      // Transform to match the format used in the app
+      const records = (data || []).map((record) => ({
+        date: record.record_date,
+        completed: record.completed,
+        remaining: record.remaining,
+        total: record.total,
+        progress: parseFloat(record.progress),
+      }));
+
+      console.log(`✅ Loaded ${records.length} daily records from cloud`);
+      return records;
+    } catch (error) {
+      console.error("❌ Error getting daily records:", error);
+      return [];
+    }
+  },
+
+  async deleteDailyRecord(recordDate) {
+    try {
+      const userId = generateUserId();
+      const { error } = await supabase
+        .from("daily_records")
+        .delete()
+        .eq("user_id", userId)
+        .eq("record_date", recordDate);
+
+      if (error) throw error;
+      console.log("✅ Daily record deleted from cloud");
+    } catch (error) {
+      console.error("❌ Error deleting daily record:", error);
+      throw error;
+    }
+  },
+
+  // =====================================================
   // POMODORO STATS SYNC
   // =====================================================
   async savePomodoroStats(statsData) {

@@ -15,6 +15,16 @@ import {
 } from "recharts";
 
 const AdvancedAnalytics = ({ stats, goals }) => {
+  // Format minutes to HH:MM format when over 60 minutes
+  const formatMinutes = (minutes) => {
+    if (minutes < 60) {
+      return `${Math.round(minutes)} min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+  };
+
   // Prepare data for charts
   const prepareCategoryData = () => {
     const labels = stats.today.labels || {};
@@ -167,9 +177,11 @@ const AdvancedAnalytics = ({ stats, goals }) => {
                 <span>Session Quality:</span>
                 <span className="font-medium">
                   {stats.today.sessions > 0
-                    ? Math.round(stats.today.minutes / stats.today.sessions)
-                    : 0}
-                  min avg
+                    ? formatMinutes(
+                        Math.round(stats.today.minutes / stats.today.sessions)
+                      )
+                    : "0 min"}{" "}
+                  avg
                 </span>
               </div>
               <div className="flex justify-between">
@@ -368,8 +380,10 @@ const AdvancedAnalytics = ({ stats, goals }) => {
             <Clock size={24} className="mx-auto text-purple-600 mb-2" />
             <div className="text-2xl font-bold text-purple-700">
               {stats.today.sessions > 0
-                ? Math.round(stats.today.minutes / stats.today.sessions)
-                : 0}
+                ? formatMinutes(
+                    Math.round(stats.today.minutes / stats.today.sessions)
+                  )
+                : "0 min"}
             </div>
             <div className="text-sm text-purple-600">Avg Session</div>
           </div>

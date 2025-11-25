@@ -20,11 +20,39 @@ export const AddTimeModal = ({
   const [newLabel, setNewLabel] = useState("");
   const [showAddLabel, setShowAddLabel] = useState(false);
 
+  // New state for session-based input
+  const [inputMode, setInputMode] = useState("direct"); // "direct" or "sessions"
+  const [numberOfSessions, setNumberOfSessions] = useState("");
+  const [durationPerSession, setDurationPerSession] = useState("");
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const hoursNum = parseInt(hours) || 0;
-    const minutesNum = parseInt(minutes) || 0;
+    let hoursNum = 0;
+    let minutesNum = 0;
+    let sessionsToAdd = 1; // Default to 1 session for direct input
+
+    if (inputMode === "direct") {
+      // Direct input mode
+      hoursNum = parseInt(hours) || 0;
+      minutesNum = parseInt(minutes) || 0;
+      sessionsToAdd = 1; // Single session
+    } else {
+      // Sessions mode: calculate total time
+      const sessions = parseInt(numberOfSessions) || 0;
+      const durationPerSessionNum = parseInt(durationPerSession) || 0;
+
+      if (sessions === 0 || durationPerSessionNum === 0) {
+        alert("Please enter valid number of sessions and duration");
+        return;
+      }
+
+      // Calculate total minutes
+      const totalMinutesFromSessions = sessions * durationPerSessionNum;
+      hoursNum = Math.floor(totalMinutesFromSessions / 60);
+      minutesNum = totalMinutesFromSessions % 60;
+      sessionsToAdd = sessions; // Use actual number of sessions
+    }
 
     if (hoursNum === 0 && minutesNum === 0) {
       alert("Please enter a valid time amount");
@@ -40,11 +68,13 @@ export const AddTimeModal = ({
       totalMinutes = totalMinutes % 60;
     }
 
-    onAddTime(totalHours, totalMinutes, selectedLabel);
+    onAddTime(totalHours, totalMinutes, selectedLabel, sessionsToAdd);
 
     // Reset form
     setHours("");
     setMinutes("");
+    setNumberOfSessions("");
+    setDurationPerSession("");
     setSelectedLabel(
       availableLabels.includes("programming")
         ? "programming"
@@ -61,8 +91,23 @@ export const AddTimeModal = ({
     }
 
     // If clicking on a different category and there's time entered, auto-submit
-    const hoursNum = parseInt(hours) || 0;
-    const minutesNum = parseInt(minutes) || 0;
+    let hoursNum = 0;
+    let minutesNum = 0;
+    let sessionsToAdd = 1; // Default to 1 session
+
+    if (inputMode === "direct") {
+      hoursNum = parseInt(hours) || 0;
+      minutesNum = parseInt(minutes) || 0;
+      sessionsToAdd = 1; // Single session
+    } else {
+      // Sessions mode
+      const sessions = parseInt(numberOfSessions) || 0;
+      const durationPerSessionNum = parseInt(durationPerSession) || 0;
+      const totalMinutesFromSessions = sessions * durationPerSessionNum;
+      hoursNum = Math.floor(totalMinutesFromSessions / 60);
+      minutesNum = totalMinutesFromSessions % 60;
+      sessionsToAdd = sessions; // Use actual number of sessions
+    }
 
     if (hoursNum > 0 || minutesNum > 0) {
       // Convert if minutes are more than 60
@@ -74,11 +119,13 @@ export const AddTimeModal = ({
         totalMinutes = totalMinutes % 60;
       }
 
-      onAddTime(totalHours, totalMinutes, label);
+      onAddTime(totalHours, totalMinutes, label, sessionsToAdd);
 
       // Reset form
       setHours("");
       setMinutes("");
+      setNumberOfSessions("");
+      setDurationPerSession("");
       setSelectedLabel(
         availableLabels.includes("programming")
           ? "programming"
@@ -112,6 +159,9 @@ export const AddTimeModal = ({
   const resetForm = () => {
     setHours("");
     setMinutes("");
+    setNumberOfSessions("");
+    setDurationPerSession("");
+    setInputMode("direct");
     setSelectedLabel(
       availableLabels.includes("programming")
         ? "programming"
@@ -129,44 +179,130 @@ export const AddTimeModal = ({
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Add Study Time">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Time Input */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800">Time Spent</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hours
-              </label>
-              <input
-                type="number"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                placeholder="0"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-center text-lg"
-                min="0"
-                max="24"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Minutes
-              </label>
-              <input
-                type="number"
-                value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
-                placeholder="0"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-center text-lg"
-                min="0"
-                autoFocus
-              />
-            </div>
-          </div>
-          <p className="text-sm text-gray-500">
-            💡 If minutes are more than 60, they will be automatically converted
-            to hours and minutes
-          </p>
+        {/* Input Mode Toggle */}
+        <div className="flex items-center justify-center gap-2 bg-gray-100 p-1 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setInputMode("direct")}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              inputMode === "direct"
+                ? "bg-white text-indigo-600 shadow-sm"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Direct Time
+          </button>
+          <button
+            type="button"
+            onClick={() => setInputMode("sessions")}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              inputMode === "sessions"
+                ? "bg-white text-indigo-600 shadow-sm"
+                : "text-gray-600 hover:text-gray-800"
+            }`}
+          >
+            Multiple Sessions
+          </button>
         </div>
+
+        {/* Time Input - Direct Mode */}
+        {inputMode === "direct" && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-800">Time Spent</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Hours
+                </label>
+                <input
+                  type="number"
+                  value={hours}
+                  onChange={(e) => setHours(e.target.value)}
+                  placeholder="0"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-center text-lg"
+                  min="0"
+                  max="24"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Minutes
+                </label>
+                <input
+                  type="number"
+                  value={minutes}
+                  onChange={(e) => setMinutes(e.target.value)}
+                  placeholder="0"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-center text-lg"
+                  min="0"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <p className="text-sm text-gray-500">
+              💡 If minutes are more than 60, they will be automatically
+              converted to hours and minutes
+            </p>
+          </div>
+        )}
+
+        {/* Time Input - Sessions Mode */}
+        {inputMode === "sessions" && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-800">
+              Session Details
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Number of Sessions
+                </label>
+                <input
+                  type="number"
+                  value={numberOfSessions}
+                  onChange={(e) => setNumberOfSessions(e.target.value)}
+                  placeholder="e.g., 4"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-center text-lg"
+                  min="1"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Duration per Session (min)
+                </label>
+                <input
+                  type="number"
+                  value={durationPerSession}
+                  onChange={(e) => setDurationPerSession(e.target.value)}
+                  placeholder="e.g., 30"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-300 outline-none text-center text-lg"
+                  min="1"
+                />
+              </div>
+            </div>
+            {/* Total Time Preview */}
+            {numberOfSessions && durationPerSession && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                <p className="text-sm text-indigo-700 text-center">
+                  <span className="font-semibold">Total Time: </span>
+                  {Math.floor(
+                    (parseInt(numberOfSessions) *
+                      parseInt(durationPerSession)) /
+                      60
+                  )}{" "}
+                  hours{" "}
+                  {(parseInt(numberOfSessions) * parseInt(durationPerSession)) %
+                    60}{" "}
+                  minutes
+                </p>
+              </div>
+            )}
+            <p className="text-sm text-gray-500">
+              💡 Example: 4 sessions × 30 min = 2 hours total study time
+            </p>
+          </div>
+        )}
 
         {/* Label Selection */}
         <div className="space-y-4">

@@ -15,6 +15,16 @@ const TimeComparisonDashboard = ({
   goals,
   bestRecords,
 }) => {
+  // Format minutes to HH:MM format when over 60 minutes
+  const formatMinutes = (minutes) => {
+    if (minutes < 60) {
+      return `${Math.round(minutes)} min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+  };
+
   // Calculate comparisons
   const calculateComparison = (current, previous) => {
     if (previous === 0 && current === 0)
@@ -138,7 +148,7 @@ const TimeComparisonDashboard = ({
                 ></div>
               </div>
               <div className="text-xs text-gray-500">
-                {Math.round(Math.max(0, goal - current))} minutes remaining
+                {formatMinutes(Math.max(0, goal - current))} remaining
               </div>
             </div>
           )}
@@ -158,9 +168,7 @@ const TimeComparisonDashboard = ({
                     🎉 New record achieved!
                   </span>
                 ) : (
-                  `${Math.round(
-                    record.minutes - current
-                  )} minutes to beat record`
+                  `${formatMinutes(record.minutes - current)} to beat record`
                 )}
               </div>
             </div>
@@ -238,9 +246,9 @@ const TimeComparisonDashboard = ({
     if (avgSessionLength >= 25 && avgSessionLength <= 45) {
       insights.push({
         type: "positive",
-        text: `⏰ Perfect session length! Your average session of ${Math.round(
+        text: `⏰ Perfect session length! Your average session of ${formatMinutes(
           avgSessionLength
-        )} minutes is in the optimal range.`,
+        )} is in the optimal range.`,
       });
     }
 
@@ -352,10 +360,10 @@ const TimeComparisonDashboard = ({
           <div className="text-center bg-gray-50 rounded-lg p-4">
             <div className="text-2xl font-bold text-gray-800 mb-1">
               {stats.lifetime.totalSessions > 0
-                ? Math.round(
+                ? formatMinutes(
                     stats.lifetime.totalMinutes / stats.lifetime.totalSessions
                   )
-                : 0}
+                : "0 min"}
             </div>
             <div className="text-sm text-gray-600">Avg Session</div>
           </div>
@@ -367,14 +375,14 @@ const TimeComparisonDashboard = ({
                 bestRecords.bestWeek.minutes / 7,
                 bestRecords.bestMonth.minutes / 30
               ) > 0
-                ? Math.round(
+                ? formatMinutes(
                     Math.max(
                       bestRecords.bestDay.minutes,
                       bestRecords.bestWeek.minutes / 7,
                       bestRecords.bestMonth.minutes / 30
                     )
                   )
-                : 0}
+                : "0 min"}
             </div>
             <div className="text-sm text-gray-600">Best Day</div>
           </div>

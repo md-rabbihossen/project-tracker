@@ -213,7 +213,7 @@ export const getPomodoroGoals = () => {
 };
 
 // Add time to statistics when timer is reset/completed
-export const addPomodoroTime = (minutes, label = "study") => {
+export const addPomodoroTime = (minutes, label = "study", sessionCount = 1) => {
   const stats = getPomodoroStats();
   const today = getCurrentDate();
   const thisWeek = getWeekStartDate();
@@ -221,7 +221,7 @@ export const addPomodoroTime = (minutes, label = "study") => {
   const timestamp = new Date().toISOString();
 
   console.log(
-    `📊 Adding ${minutes} minutes of '${label}' to stats for ${today}`
+    `📊 Adding ${minutes} minutes of '${label}' (${sessionCount} sessions) to stats for ${today}`
   );
   console.log(`📅 Current week: ${thisWeek}, Current month: ${thisMonth}`);
 
@@ -236,6 +236,7 @@ export const addPomodoroTime = (minutes, label = "study") => {
     minutes: minutes,
     label: label,
     date: today,
+    sessionCount: sessionCount, // Track number of sessions
   });
 
   // Clean up sessions older than 7 days to prevent excessive storage
@@ -254,7 +255,7 @@ export const addPomodoroTime = (minutes, label = "study") => {
     stats.daily[today].labels = {};
   }
   stats.daily[today].minutes += minutes;
-  stats.daily[today].sessions += 1;
+  stats.daily[today].sessions += sessionCount; // Add session count instead of always 1
   stats.daily[today].labels[label] =
     (stats.daily[today].labels[label] || 0) + minutes;
 
@@ -267,7 +268,7 @@ export const addPomodoroTime = (minutes, label = "study") => {
     stats.weekly[thisWeek].labels = {};
   }
   stats.weekly[thisWeek].minutes += minutes;
-  stats.weekly[thisWeek].sessions += 1;
+  stats.weekly[thisWeek].sessions += sessionCount; // Add session count instead of always 1
   stats.weekly[thisWeek].labels[label] =
     (stats.weekly[thisWeek].labels[label] || 0) + minutes;
 
@@ -280,13 +281,13 @@ export const addPomodoroTime = (minutes, label = "study") => {
     stats.monthly[thisMonth].labels = {};
   }
   stats.monthly[thisMonth].minutes += minutes;
-  stats.monthly[thisMonth].sessions += 1;
+  stats.monthly[thisMonth].sessions += sessionCount; // Add session count instead of always 1
   stats.monthly[thisMonth].labels[label] =
     (stats.monthly[thisMonth].labels[label] || 0) + minutes;
 
   // Update lifetime stats
   stats.lifetime.totalMinutes += minutes;
-  stats.lifetime.totalSessions += 1;
+  stats.lifetime.totalSessions += sessionCount; // Add session count instead of always 1
   stats.lifetime.labels[label] = (stats.lifetime.labels[label] || 0) + minutes;
 
   console.log(`📊 Updated stats:`, {
@@ -383,9 +384,14 @@ export const getLifetimeStats = () => {
 };
 
 // Add manual time (from the Add Time button)
-export const addManualTime = (hours, minutes, label = "study") => {
+export const addManualTime = (
+  hours,
+  minutes,
+  label = "study",
+  sessionCount = 1
+) => {
   const totalMinutes = hours * 60 + minutes;
-  const result = addPomodoroTime(totalMinutes, label);
+  const result = addPomodoroTime(totalMinutes, label, sessionCount);
 
   // Check for new records after manual time addition
   checkAndUpdateRecords();

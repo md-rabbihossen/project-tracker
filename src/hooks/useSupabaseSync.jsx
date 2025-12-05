@@ -142,7 +142,11 @@ export const useSupabaseSync = () => {
     // Subscribe to tasks changes
     if (callbacks.onTasksUpdate) {
       const tasksSub = syncData.subscribeToTodayTasks((newData) => {
-        console.log("🔄 Tasks updated from another device");
+        console.log("🔄 Tasks updated from another device", {
+          tasksCount: newData.tasks?.length || 0,
+          completedCount: newData.completedOneTimeTasks?.length || 0,
+          lastReset: newData.lastResetDate,
+        });
         callbacks.onTasksUpdate(newData);
       });
       subscriptionsRef.current.push(tasksSub);
@@ -164,6 +168,17 @@ export const useSupabaseSync = () => {
         callbacks.onGoalsUpdate(newData);
       });
       subscriptionsRef.current.push(goalsSub);
+    }
+
+    // Subscribe to daily tasks (Track page) changes
+    if (callbacks.onDailyTasksUpdate) {
+      const dailyTasksSub = syncData.subscribeToDailyTasks((newData) => {
+        console.log("🔄 Daily tasks (Track page) updated from another device", {
+          tasksCount: newData?.length || 0,
+        });
+        callbacks.onDailyTasksUpdate(newData);
+      });
+      subscriptionsRef.current.push(dailyTasksSub);
     }
   };
 

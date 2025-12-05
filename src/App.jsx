@@ -1970,6 +1970,21 @@ export default function App() {
               hasAnyCloudData = true;
             }
 
+            // Load todayDailyTasks (Track page progress tasks) from cloud
+            if (cloudData.todayDailyTasks) {
+              console.log(
+                "✅ Loading",
+                cloudData.todayDailyTasks.length,
+                "daily tasks from cloud"
+              );
+              setTodayDailyTasks(cloudData.todayDailyTasks);
+              localStorage.setItem(
+                "todayDailyTasks",
+                JSON.stringify(cloudData.todayDailyTasks)
+              );
+              hasAnyCloudData = true;
+            }
+
             // Load pomodoro stats from cloud or localStorage
             if (cloudData.pomodoroStats) {
               console.log("✅ Loading pomodoro stats from cloud");
@@ -2016,6 +2031,62 @@ export default function App() {
               );
               hasAnyCloudData = true;
             }
+
+            // Set up real-time subscriptions for cross-device sync
+            console.log("🔄 Setting up real-time subscriptions...");
+            setupRealtimeSubscriptions({
+              onRoadmapUpdate: (newRoadmap) => {
+                console.log("🔄 Roadmap updated from another device!");
+                setRoadmap(newRoadmap);
+                localStorage.setItem("roadmap", JSON.stringify(newRoadmap));
+              },
+              onTasksUpdate: (newData) => {
+                console.log("🔄 Tasks updated from another device!", {
+                  tasksCount: newData.tasks?.length || 0,
+                  completedCount: newData.completedOneTimeTasks?.length || 0,
+                  lastReset: newData.lastResetDate,
+                });
+                const today = getDateString();
+
+                // Only update if it's today's data
+                if (newData.lastResetDate === today) {
+                  console.log("✅ Updating tasks from real-time sync");
+                  setTodayTasks(newData.tasks || []);
+                  setCompletedOneTimeTasks(newData.completedOneTimeTasks || []);
+
+                  // Update localStorage
+                  localStorage.setItem(
+                    "todayTasks",
+                    JSON.stringify(newData.tasks || [])
+                  );
+                  localStorage.setItem(
+                    "completedOneTimeTasks",
+                    JSON.stringify(newData.completedOneTimeTasks || [])
+                  );
+                  localStorage.setItem(
+                    "todayTasksLastReset",
+                    newData.lastResetDate
+                  );
+                } else {
+                  console.log(
+                    "⚠️ Ignoring old task data from cloud (not today's)"
+                  );
+                }
+              },
+              onBooksUpdate: (newBooks) => {
+                console.log("🔄 Books updated from another device!");
+                setBooks(newBooks || []);
+                localStorage.setItem("books", JSON.stringify(newBooks || []));
+              },
+              onGoalsUpdate: (newGoals) => {
+                console.log("🔄 Goals updated from another device!");
+                setGoals(newGoals || []);
+                localStorage.setItem(
+                  "userGoals",
+                  JSON.stringify(newGoals || [])
+                );
+              },
+            });
 
             // Load daily records from cloud
             try {
@@ -2447,30 +2518,27 @@ export default function App() {
       goals: goals?.length || 0,
     });
 
-    // Debounce saves to prevent too many writes
+    // 1. Save to localStorage IMMEDIATELY (no debounce - instant backup)
+    localStorage.setItem("roadmap", JSON.stringify(roadmap));
+    localStorage.setItem("todayTasks", JSON.stringify(todayTasks));
+    localStorage.setItem(
+      "completedOneTimeTasks",
+      JSON.stringify(completedOneTimeTasks)
+    );
+    localStorage.setItem("skippedTasks", JSON.stringify(skippedTasks));
+    saveBooksToStorage(books);
+    localStorage.setItem("todayDailyTasks", JSON.stringify(todayDailyTasks));
+    localStorage.setItem("quoteIndex", quoteIndex.toString());
+    localStorage.setItem("userGoals", JSON.stringify(goals));
+    localStorage.setItem("dailyTaskRecords", JSON.stringify(dailyRecords));
+    console.log("💾 Data auto-saved to localStorage");
+
+    // 2. Debounce ONLY cloud sync to prevent too many API calls
     const timeoutId = setTimeout(async () => {
       try {
-        console.log("⏰ Debounce timer expired, starting save...");
+        console.log("⏰ Debounce timer expired, starting cloud sync...");
 
-        // 1. Save to localStorage (instant backup)
-        localStorage.setItem("roadmap", JSON.stringify(roadmap));
-        localStorage.setItem("todayTasks", JSON.stringify(todayTasks));
-        localStorage.setItem(
-          "completedOneTimeTasks",
-          JSON.stringify(completedOneTimeTasks)
-        );
-        localStorage.setItem("skippedTasks", JSON.stringify(skippedTasks));
-        saveBooksToStorage(books);
-        localStorage.setItem(
-          "todayDailyTasks",
-          JSON.stringify(todayDailyTasks)
-        );
-        localStorage.setItem("quoteIndex", quoteIndex.toString());
-        localStorage.setItem("userGoals", JSON.stringify(goals));
-        localStorage.setItem("dailyTaskRecords", JSON.stringify(dailyRecords));
-        console.log("💾 Data auto-saved to localStorage");
-
-        // 2. Sync to Supabase (cloud backup) 🌩️ - Use direct syncData calls
+        // Sync to Supabase (cloud backup) 🌩️
         console.log("☁️ Starting Supabase sync...");
         const syncPromises = [];
 
@@ -2481,7 +2549,7 @@ export default function App() {
           console.log("  ⏭️ Skipping roadmap (null)");
         }
 
-        if (todayTasks && todayTasks.length > 0) {
+        if (todayTasks && todayTasks.length >= 0) {
           console.log("  ✅ Adding", todayTasks.length, "tasks to sync queue");
           const today = getDateString();
           const validCompletedTasks = filterTodayCompletedTasks(
@@ -2492,21 +2560,21 @@ export default function App() {
             syncData.saveTodayTasks(todayTasks, validCompletedTasks, today)
           );
         } else {
-          console.log("  ⏭️ Skipping tasks (empty or null)");
+          console.log("  ⏭️ Skipping tasks (null)");
         }
 
-        if (books && books.length > 0) {
+        if (books && books.length >= 0) {
           console.log("  📚 Adding", books.length, "books to sync queue");
           syncPromises.push(syncData.saveBooks(books));
         } else {
-          console.log("  ⏭️ Skipping books (empty or null)");
+          console.log("  ⏭️ Skipping books (null)");
         }
 
-        if (goals && goals.length > 0) {
+        if (goals && goals.length >= 0) {
           console.log("  🎯 Adding", goals.length, "goals to sync queue");
           syncPromises.push(syncData.saveUserGoals(goals));
         } else {
-          console.log("  ⏭️ Skipping goals (empty or null)");
+          console.log("  ⏭️ Skipping goals (null)");
         }
 
         // Sync pomodoro stats
@@ -2519,6 +2587,18 @@ export default function App() {
           console.log(
             "  ⏭️ Skipping pomodoro stats (not found in localStorage)"
           );
+        }
+
+        // Sync todayDailyTasks (Track page progress tasks)
+        if (todayDailyTasks && todayDailyTasks.length >= 0) {
+          console.log(
+            "  📈 Adding",
+            todayDailyTasks.length,
+            "daily tasks to sync queue"
+          );
+          syncPromises.push(syncData.saveTodayDailyTasks(todayDailyTasks));
+        } else {
+          console.log("  ⏭️ Skipping daily tasks (null)");
         }
 
         // Sync app settings (quote index, etc.)
@@ -2537,7 +2617,7 @@ export default function App() {
       } catch (e) {
         console.error("💥 Failed to save/sync data:", e);
       }
-    }, 2000); // Debounce to 2 seconds (give user time to finish typing/editing)
+    }, 1000); // Debounce to 1 second for faster cross-device sync
 
     return () => clearTimeout(timeoutId);
   }, [

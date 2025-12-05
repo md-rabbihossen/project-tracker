@@ -143,6 +143,58 @@ export const syncData = {
   },
 
   // =====================================================
+  // TODAY DAILY TASKS (TRACK PAGE) SYNC
+  // =====================================================
+  async saveTodayDailyTasks(dailyTasksData) {
+    try {
+      const userId = generateUserId();
+      console.log("🔄 Saving today daily tasks to Supabase:", {
+        userId,
+        tasksCount: dailyTasksData?.length || 0,
+      });
+
+      const { data, error } = await supabase.from("today_daily_tasks").upsert(
+        {
+          user_id: userId,
+          daily_tasks: dailyTasksData,
+        },
+        { onConflict: "user_id" }
+      );
+
+      if (error) {
+        console.error("❌ Supabase upsert error:", error);
+        throw error;
+      }
+      console.log("✅ Today daily tasks synced to cloud", data);
+      return data;
+    } catch (error) {
+      console.error("❌ Error saving today daily tasks:", error);
+      throw error;
+    }
+  },
+
+  async getTodayDailyTasks() {
+    try {
+      const userId = generateUserId();
+      const { data, error } = await supabase
+        .from("today_daily_tasks")
+        .select("daily_tasks")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching daily tasks:", error);
+        return [];
+      }
+
+      return data?.daily_tasks || [];
+    } catch (error) {
+      console.error("❌ Error getting today daily tasks:", error);
+      return [];
+    }
+  },
+
+  // =====================================================
   // BOOKS SYNC
   // =====================================================
   async saveBooks(booksData) {
@@ -506,6 +558,7 @@ export const syncData = {
 
   subscribeToTodayTasks(callback) {
     const userId = generateUserId();
+    console.log("📡 Setting up today_tasks subscription for user:", userId);
     return supabase
       .channel("today_tasks_changes")
       .on(
@@ -517,7 +570,12 @@ export const syncData = {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          console.log("🔄 Tasks updated from another device");
+          console.log("🔄 Tasks subscription triggered:", {
+            event: payload.eventType,
+            tasksCount: payload.new?.tasks?.length || 0,
+            completedCount: payload.new?.completed_one_time_tasks?.length || 0,
+            lastReset: payload.new?.last_reset_date,
+          });
           callback({
             tasks: payload.new?.tasks || [],
             completedOneTimeTasks: payload.new?.completed_one_time_tasks || [],
@@ -525,7 +583,9 @@ export const syncData = {
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("📡 Today tasks subscription status:", status);
+      });
   },
 
   subscribeToBooks(callback) {
@@ -566,6 +626,35 @@ export const syncData = {
         }
       )
       .subscribe();
+  },
+
+  subscribeToDailyTasks(callback) {
+    const userId = generateUserId();
+    console.log(
+      "📡 Setting up today_daily_tasks subscription for user:",
+      userId
+    );
+    return supabase
+      .channel("daily_tasks_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "today_daily_tasks",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log("🔄 Daily tasks subscription triggered:", {
+            event: payload.eventType,
+            tasksCount: payload.new?.daily_tasks?.length || 0,
+          });
+          callback(payload.new?.daily_tasks || []);
+        }
+      )
+      .subscribe((status) => {
+        console.log("📡 Daily tasks subscription status:", status);
+      });
   },
 
   // =====================================================
@@ -646,6 +735,7 @@ export const syncData = {
       const [
         roadmap,
         todayTasksData,
+        todayDailyTasks,
         books,
         pomodoroStats,
         goals,
@@ -654,6 +744,7 @@ export const syncData = {
       ] = await Promise.all([
         this.getRoadmap(),
         this.getTodayTasks(),
+        this.getTodayDailyTasks(),
         this.getBooks(),
         this.getPomodoroStats(),
         this.getUserGoals(),
@@ -664,6 +755,7 @@ export const syncData = {
       console.log("✅ All data loaded from cloud:", {
         roadmap: roadmap ? "exists" : "null",
         tasks: todayTasksData.tasks?.length || 0,
+        todayDailyTasks: todayDailyTasks?.length || 0,
         books: books?.length || 0,
         goals: goals?.length || 0,
         pomodoroStats: pomodoroStats ? "exists" : "null",
@@ -673,6 +765,7 @@ export const syncData = {
       return {
         roadmap,
         todayTasks: todayTasksData, // This already has {tasks, completedOneTimeTasks, lastResetDate}
+        todayDailyTasks,
         books,
         pomodoroStats,
         goals,

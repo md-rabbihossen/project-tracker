@@ -1971,7 +1971,10 @@ export default function App() {
             }
 
             // Load todayDailyTasks (Track page progress tasks) from cloud
-            if (cloudData.todayDailyTasks) {
+            if (
+              cloudData.todayDailyTasks &&
+              cloudData.todayDailyTasks.length > 0
+            ) {
               console.log(
                 "✅ Loading",
                 cloudData.todayDailyTasks.length,
@@ -1983,6 +1986,38 @@ export default function App() {
                 JSON.stringify(cloudData.todayDailyTasks)
               );
               hasAnyCloudData = true;
+            } else {
+              // No data in cloud, try localStorage
+              console.log(
+                "⚠️ No daily tasks in cloud, checking localStorage..."
+              );
+              try {
+                const localDailyTasks = localStorage.getItem("todayDailyTasks");
+                if (localDailyTasks) {
+                  const parsedTasks = JSON.parse(localDailyTasks);
+                  if (parsedTasks && parsedTasks.length > 0) {
+                    console.log(
+                      "✅ Loading",
+                      parsedTasks.length,
+                      "daily tasks from localStorage"
+                    );
+                    setTodayDailyTasks(parsedTasks);
+                    // Sync to cloud immediately
+                    console.log("☁️ Syncing localStorage tasks to cloud...");
+                    syncData.saveTodayDailyTasks(parsedTasks).catch((err) => {
+                      console.error(
+                        "❌ Failed to sync daily tasks to cloud:",
+                        err
+                      );
+                    });
+                  }
+                }
+              } catch (err) {
+                console.error(
+                  "❌ Error loading daily tasks from localStorage:",
+                  err
+                );
+              }
             }
 
             // Load pomodoro stats from cloud or localStorage

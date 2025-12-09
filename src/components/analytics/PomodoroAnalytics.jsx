@@ -18,12 +18,12 @@ import {
   getAllCurrentStats,
   getAvailableLabels,
   getBestRecords,
-  getLast6HoursStats,
   getLifetimeStats,
   getPomodoroGoals,
   getPreviousDayStats,
   getPreviousMonthStats,
   getPreviousWeekStats,
+  getWeeklyAveragePerDay,
   removeLabel,
   updatePomodoroGoals,
 } from "../../utils/pomodoroStats";
@@ -135,10 +135,12 @@ export const PomodoroAnalytics = () => {
     return "F";
   };
 
-  const [last6HoursStats, setLast6HoursStats] = useState({
-    minutes: 0,
-    sessions: 0,
-    labels: {},
+  const [weeklyAverage, setWeeklyAverage] = useState({
+    averageMinutes: 0,
+    totalMinutes: 0,
+    daysPassed: 0,
+    totalSessions: 0,
+    labels: {}
   });
 
   const [previousStats, setPreviousStats] = useState({
@@ -238,11 +240,11 @@ export const PomodoroAnalytics = () => {
       loadBestRecords();
     }, 60000);
 
-    // Set up separate interval to refresh last 6 hours stats every 5 minutes for real-time updates
+    // Set up separate interval to refresh weekly average every 5 minutes for real-time updates
     const frequentInterval = setInterval(() => {
-      console.log("🕒 Refreshing last 6 hours stats...");
-      const last6Hours = getLast6HoursStats();
-      setLast6HoursStats(last6Hours);
+      console.log("🕒 Refreshing weekly average...");
+      const weeklyAvg = getWeeklyAveragePerDay();
+      setWeeklyAverage(weeklyAvg);
     }, 300000); // 5 minutes = 300000ms
 
     return () => {
@@ -268,10 +270,10 @@ export const PomodoroAnalytics = () => {
       lifetime: lifetimeStats,
     });
 
-    // Load last 6 hours stats - this will now use real timestamped data
-    const last6Hours = getLast6HoursStats();
-    console.log("📊 Loaded last 6 hours stats:", last6Hours);
-    setLast6HoursStats(last6Hours);
+    // Load weekly average per day
+    const weeklyAvg = getWeeklyAveragePerDay();
+    console.log("📊 Loaded weekly average:", weeklyAvg);
+    setWeeklyAverage(weeklyAvg);
 
     const prevDayStats = getPreviousDayStats();
     const prevWeekStats = getPreviousWeekStats();
@@ -706,10 +708,10 @@ export const PomodoroAnalytics = () => {
               </div>
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
                 <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
-                  {formatDuration(last6HoursStats.minutes)}
+                  {formatDuration(weeklyAverage.averageMinutes)}
                 </div>
                 <div className="text-xs text-gray-700 font-medium mt-1">
-                  Last 6 Hours
+                  Avg/Day This Week
                 </div>
               </div>
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
@@ -913,6 +915,63 @@ export const PomodoroAnalytics = () => {
                     color="border-blue-200"
                     formatDate={formatBestDayDate}
                   />
+                </motion.div>
+
+                {/* Average Study Time This Week */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100"
+                >
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <Clock size={20} className="text-purple-600" />
+                    Average Study Time This Week
+                  </h3>
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <div className="flex items-baseline justify-between mb-2">
+                      <h4 className="font-semibold text-gray-800">
+                        Daily Average
+                      </h4>
+                      <span className="text-xs text-gray-500">
+                        Day {weeklyAverage.daysPassed} of 7
+                      </span>
+                    </div>
+                    <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-500 mb-2">
+                      {formatDuration(weeklyAverage.averageMinutes)}
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">
+                      {formatDuration(weeklyAverage.totalMinutes)} total this week • {weeklyAverage.totalSessions} sessions
+                    </p>
+                    {weeklyAverage.daysPassed > 0 && (
+                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-100">
+                        <p className="text-xs text-gray-700 mb-1">
+                          <strong>How it works:</strong> Total time divided by days passed (including today)
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {formatDuration(weeklyAverage.totalMinutes)} ÷ {weeklyAverage.daysPassed} days = {formatDuration(weeklyAverage.averageMinutes)}/day
+                        </p>
+                      </div>
+                    )}
+                    {Object.keys(weeklyAverage.labels || {}).length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <p className="text-xs text-gray-500 mb-2">
+                          <strong>Weekly Breakdown:</strong>
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(weeklyAverage.labels).map(
+                            ([label, minutes]) => (
+                              <span
+                                key={label}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-medium"
+                              >
+                                {label}: {formatDuration(minutes)}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
 
                 {/* Previous Day Comparison */}

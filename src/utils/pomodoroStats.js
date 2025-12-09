@@ -537,6 +537,50 @@ export const getPreviousMonthStats = () => {
   return previousMonthStats;
 };
 
+// Get average study time per day for the current week (updates daily)
+export const getWeeklyAveragePerDay = () => {
+  const stats = getPomodoroStats();
+  const currentWeekStart = getWeekStartDate();
+  const weekStats = stats.weekly[currentWeekStart] || { minutes: 0, sessions: 0, labels: {} };
+  
+  // Calculate days passed in current week (including today)
+  const today = new Date();
+  const weekStart = new Date(currentWeekStart);
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  
+  // Calculate days from Saturday (week start = Saturday)
+  // Saturday = 6, so if today is Saturday (6), daysPassed = 1
+  // If today is Sunday (0), daysPassed = 2
+  // If today is Monday (1), daysPassed = 3, etc.
+  let daysPassed;
+  if (dayOfWeek === 6) {
+    // Saturday (week start)
+    daysPassed = 1;
+  } else {
+    // Sunday (0) = 2, Monday (1) = 3, Tuesday (2) = 4, etc.
+    daysPassed = dayOfWeek + 2;
+  }
+  
+  // Calculate average (total minutes / days passed)
+  const averageMinutes = daysPassed > 0 ? Math.round(weekStats.minutes / daysPassed) : 0;
+  
+  console.log(`📊 Weekly average calculation:`, {
+    currentWeek: currentWeekStart,
+    totalMinutes: weekStats.minutes,
+    daysPassed,
+    averagePerDay: averageMinutes,
+    todayIs: today.toLocaleDateString('en-US', { weekday: 'long' })
+  });
+  
+  return {
+    averageMinutes,
+    totalMinutes: weekStats.minutes,
+    daysPassed,
+    totalSessions: weekStats.sessions,
+    labels: weekStats.labels || {}
+  };
+};
+
 // Helper function to get week start date from any date (Saturday)
 export const getWeekStartDateFromDate = (date) => {
   const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday

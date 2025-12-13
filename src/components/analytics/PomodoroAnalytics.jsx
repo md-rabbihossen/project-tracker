@@ -140,7 +140,7 @@ export const PomodoroAnalytics = () => {
     totalMinutes: 0,
     daysPassed: 0,
     totalSessions: 0,
-    labels: {}
+    labels: {},
   });
 
   const [previousStats, setPreviousStats] = useState({
@@ -940,15 +940,19 @@ export const PomodoroAnalytics = () => {
                       {formatDuration(weeklyAverage.averageMinutes)}
                     </div>
                     <p className="text-sm text-gray-600 mb-3">
-                      {formatDuration(weeklyAverage.totalMinutes)} total this week • {weeklyAverage.totalSessions} sessions
+                      {formatDuration(weeklyAverage.totalMinutes)} total this
+                      week • {weeklyAverage.totalSessions} sessions
                     </p>
                     {weeklyAverage.daysPassed > 0 && (
                       <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-100">
                         <p className="text-xs text-gray-700 mb-1">
-                          <strong>How it works:</strong> Total time divided by days passed (including today)
+                          <strong>How it works:</strong> Total time divided by
+                          days passed (including today)
                         </p>
                         <p className="text-xs text-gray-600">
-                          {formatDuration(weeklyAverage.totalMinutes)} ÷ {weeklyAverage.daysPassed} days = {formatDuration(weeklyAverage.averageMinutes)}/day
+                          {formatDuration(weeklyAverage.totalMinutes)} ÷{" "}
+                          {weeklyAverage.daysPassed} days ={" "}
+                          {formatDuration(weeklyAverage.averageMinutes)}/day
                         </p>
                       </div>
                     )}

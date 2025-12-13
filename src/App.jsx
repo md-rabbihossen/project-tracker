@@ -1466,6 +1466,56 @@ function AddEditBookModal({ isOpen, onClose, onSave, editingBook }) {
   );
 }
 
+// Helper function to compare data freshness and completeness
+// Returns true if cloudData should be used, false if localStorage is better
+const shouldUseCloudData = (cloudData, localData, dataType) => {
+  // If no cloud data, use local
+  if (!cloudData || (Array.isArray(cloudData) && cloudData.length === 0)) {
+    console.log(`📊 ${dataType}: No cloud data, using localStorage`);
+    return false;
+  }
+
+  // If no local data, use cloud
+  if (!localData || (Array.isArray(localData) && localData.length === 0)) {
+    console.log(`📊 ${dataType}: No local data, using cloud`);
+    return true;
+  }
+
+  // Both have data - compare completeness
+  const cloudSize = Array.isArray(cloudData)
+    ? cloudData.length
+    : cloudData
+    ? Object.keys(cloudData).length
+    : 0;
+  const localSize = Array.isArray(localData)
+    ? localData.length
+    : localData
+    ? Object.keys(localData).length
+    : 0;
+
+  // If cloud has significantly more data (20% or more), prefer cloud
+  if (cloudSize >= localSize * 1.2) {
+    console.log(
+      `📊 ${dataType}: Cloud has more data (${cloudSize} vs ${localSize}), using cloud`
+    );
+    return true;
+  }
+
+  // If local has significantly more data, prefer local and sync it
+  if (localSize >= cloudSize * 1.2) {
+    console.log(
+      `📊 ${dataType}: Local has more data (${localSize} vs ${cloudSize}), using local`
+    );
+    return false;
+  }
+
+  // Similar size - prefer cloud as source of truth
+  console.log(
+    `📊 ${dataType}: Similar sizes (cloud: ${cloudSize}, local: ${localSize}), using cloud`
+  );
+  return true;
+};
+
 // Helper function to filter completedOneTimeTasks to only include today's tasks
 const filterTodayCompletedTasks = (completedOneTimeTasks) => {
   const todayDateString = new Date().toDateString();
@@ -1500,6 +1550,8 @@ export default function App() {
   const isUserAddingDataRef = useRef(false);
   const syncTimeoutRef = useRef(null);
   const resetJustPerformedRef = useRef(false);
+  const justLoadedFromCloudRef = useRef(false); // NEW: Prevent immediate sync after loading
+  const dataLoadTimestampRef = useRef(0); // NEW: Track when data was loaded
 
   // State for bottom navigation
   const [activeSection, setActiveSection] = useState("home");
@@ -1970,8 +2022,20 @@ export default function App() {
               hasAnyCloudData = true;
             }
 
-            // Load todayDailyTasks (Track page progress tasks) from cloud
+            // Load todayDailyTasks (Track page progress tasks) with smart comparison
+            const localDailyTasksStr = localStorage.getItem("todayDailyTasks");
+            const localDailyTasks = localDailyTasksStr
+              ? JSON.parse(localDailyTasksStr)
+              : [];
+
+            const useCloud = shouldUseCloudData(
+              cloudData.todayDailyTasks,
+              localDailyTasks,
+              "Track Tasks"
+            );
+
             if (
+              useCloud &&
               cloudData.todayDailyTasks &&
               cloudData.todayDailyTasks.length > 0
             ) {
@@ -1986,48 +2050,51 @@ export default function App() {
                 JSON.stringify(cloudData.todayDailyTasks)
               );
               hasAnyCloudData = true;
-            } else {
-              // No data in cloud, try localStorage
+            } else if (localDailyTasks && localDailyTasks.length > 0) {
+              // Use local data and sync to cloud
               console.log(
-                "⚠️ No daily tasks in cloud, checking localStorage..."
+                "✅ Loading",
+                localDailyTasks.length,
+                "daily tasks from localStorage (more complete)"
               );
-              try {
-                const localDailyTasks = localStorage.getItem("todayDailyTasks");
-                if (localDailyTasks) {
-                  const parsedTasks = JSON.parse(localDailyTasks);
-                  if (parsedTasks && parsedTasks.length > 0) {
-                    console.log(
-                      "✅ Loading",
-                      parsedTasks.length,
-                      "daily tasks from localStorage"
-                    );
-                    setTodayDailyTasks(parsedTasks);
-                    // Sync to cloud immediately
-                    console.log("☁️ Syncing localStorage tasks to cloud...");
-                    syncData.saveTodayDailyTasks(parsedTasks).catch((err) => {
-                      console.error(
-                        "❌ Failed to sync daily tasks to cloud:",
-                        err
-                      );
-                    });
-                  }
-                }
-              } catch (err) {
-                console.error(
-                  "❌ Error loading daily tasks from localStorage:",
-                  err
-                );
-              }
+              setTodayDailyTasks(localDailyTasks);
+              // Sync to cloud immediately
+              console.log("☁️ Syncing localStorage tasks to cloud...");
+              syncData.saveTodayDailyTasks(localDailyTasks).catch((err) => {
+                console.error("❌ Failed to sync daily tasks to cloud:", err);
+              });
             }
 
-            // Load pomodoro stats from cloud or localStorage
-            if (cloudData.pomodoroStats) {
-              console.log("✅ Loading pomodoro stats from cloud");
-              localStorage.setItem(
-                "pomodoroStats",
-                JSON.stringify(cloudData.pomodoroStats)
+            // Load pomodoro stats from cloud or localStorage with smart comparison
+            const localPomodoroStats = localStorage.getItem("pomodoroStats");
+            const localStats = localPomodoroStats
+              ? JSON.parse(localPomodoroStats)
+              : null;
+
+            if (cloudData.pomodoroStats || localStats) {
+              // Compare cloud vs local data
+              const cloudStats = cloudData.pomodoroStats;
+              const useCloud = shouldUseCloudData(
+                cloudStats?.lifetime?.totalMinutes,
+                localStats?.lifetime?.totalMinutes,
+                "Pomodoro Stats"
               );
-              hasAnyCloudData = true;
+
+              if (useCloud && cloudStats) {
+                console.log("✅ Loading pomodoro stats from cloud");
+                localStorage.setItem(
+                  "pomodoroStats",
+                  JSON.stringify(cloudStats)
+                );
+                hasAnyCloudData = true;
+              } else if (localStats) {
+                console.log("✅ Using local pomodoro stats (more complete)");
+                // Sync local data to cloud
+                console.log("☁️ Syncing local pomodoro stats to cloud...");
+                syncData.savePomodoroStats(localStats).catch((err) => {
+                  console.error("❌ Failed to sync pomodoro stats:", err);
+                });
+              }
             }
 
             // Load app settings from cloud or localStorage
@@ -2054,8 +2121,17 @@ export default function App() {
               hasAnyCloudData = true;
             }
 
-            // Load user goals from cloud
-            if (cloudData.goals) {
+            // Load user goals from cloud with smart comparison
+            const localGoalsStr = localStorage.getItem("userGoals");
+            const localGoals = localGoalsStr ? JSON.parse(localGoalsStr) : [];
+
+            const useCloudGoals = shouldUseCloudData(
+              cloudData.goals,
+              localGoals,
+              "Goals"
+            );
+
+            if (useCloudGoals && cloudData.goals) {
               console.log(
                 `✅ Loading ${cloudData.goals.length} goals from cloud`
               );
@@ -2065,6 +2141,16 @@ export default function App() {
                 JSON.stringify(cloudData.goals)
               );
               hasAnyCloudData = true;
+            } else if (localGoals && localGoals.length > 0) {
+              console.log(
+                `✅ Using ${localGoals.length} goals from localStorage (more complete)`
+              );
+              setGoals(localGoals);
+              // Sync to cloud
+              console.log("☁️ Syncing local goals to cloud...");
+              syncData.saveUserGoals(localGoals).catch((err) => {
+                console.error("❌ Failed to sync goals:", err);
+              });
             }
 
             // Set up real-time subscriptions for cross-device sync
@@ -2167,6 +2253,20 @@ export default function App() {
               console.log(
                 "✅ Prioritizing Supabase data, skipping localStorage fallback"
               );
+
+              // CRITICAL: Mark that we just loaded from cloud to prevent immediate sync
+              justLoadedFromCloudRef.current = true;
+              dataLoadTimestampRef.current = Date.now();
+              console.log(
+                "🔒 Blocking auto-save for 5 seconds to prevent overwriting cloud data"
+              );
+
+              // Unblock after 5 seconds
+              setTimeout(() => {
+                justLoadedFromCloudRef.current = false;
+                console.log("🔓 Auto-save unblocked - safe to sync now");
+              }, 5000);
+
               setLoading(false);
               return; // Exit early - don't call loadFromLocalStorage()
             } else {
@@ -2542,6 +2642,15 @@ export default function App() {
     }
     if (!userId) {
       console.log("⏸️ Auto-save skipped: no userId");
+      return;
+    }
+
+    // CRITICAL: Prevent auto-save immediately after loading from cloud
+    if (justLoadedFromCloudRef.current) {
+      const timeSinceLoad = Date.now() - dataLoadTimestampRef.current;
+      console.log(
+        `⏸️ Auto-save blocked: just loaded from cloud ${timeSinceLoad}ms ago`
+      );
       return;
     }
 

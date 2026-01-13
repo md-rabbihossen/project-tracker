@@ -2199,6 +2199,21 @@ export default function App() {
 
                 // Only update if it's today's data
                 if (newData.lastResetDate === today) {
+                  // PROTECTION: Don't accept empty arrays from real-time sync unless intentional
+                  const hasAnyTasks =
+                    (newData.tasks && newData.tasks.length > 0) ||
+                    (newData.completedOneTimeTasks &&
+                      newData.completedOneTimeTasks.length > 0);
+                  const currentHasTasks =
+                    todayTasks.length > 0 || completedOneTimeTasks.length > 0;
+
+                  if (!hasAnyTasks && currentHasTasks) {
+                    console.warn(
+                      "⚠️ BLOCKED real-time update with empty arrays - preventing data loss"
+                    );
+                    return;
+                  }
+
                   console.log("✅ Updating tasks from real-time sync");
                   setTodayTasks(newData.tasks || []);
                   setCompletedOneTimeTasks(newData.completedOneTimeTasks || []);
@@ -2722,26 +2737,27 @@ export default function App() {
         }
 
         if (todayTasks && todayTasks.length >= 0) {
-          console.log("  ✅ Adding", todayTasks.length, "tasks to sync queue");
           const today = getDateString();
           const validCompletedTasks = filterTodayCompletedTasks(
             completedOneTimeTasks
           );
 
-          // CRITICAL FIX: Don't sync if both arrays are empty AND we have data in localStorage
-          // This prevents overwriting good cloud data with empty arrays during edge cases
-          const localTasks = localStorage.getItem("todayTasks");
-          const hasLocalData = localTasks && JSON.parse(localTasks).length > 0;
-          const bothEmpty =
-            todayTasks.length === 0 && validCompletedTasks.length === 0;
+          // CRITICAL: NEVER sync empty arrays to prevent data loss
+          const hasAnyTasks =
+            todayTasks.length > 0 || validCompletedTasks.length > 0;
 
-          if (bothEmpty && hasLocalData) {
-            console.warn(
-              "⚠️ Prevented syncing empty arrays when localStorage has data - possible race condition"
+          if (hasAnyTasks) {
+            console.log(
+              "  ✅ Adding",
+              todayTasks.length,
+              "tasks to sync queue"
             );
-          } else {
             syncPromises.push(
               syncData.saveTodayTasks(todayTasks, validCompletedTasks, today)
+            );
+          } else {
+            console.warn(
+              "  ⚠️ BLOCKED: Not syncing empty arrays to prevent data loss"
             );
           }
         } else {

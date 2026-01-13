@@ -715,9 +715,58 @@ export const PomodoroAnalytics = () => {
                 </div>
               </div>
 
-              {/* Best Day Comparison Card */}
+              {/* Previous Day Comparison Card */}
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
                 {(() => {
+                  const previousDayMinutes = previousStats.previousDay?.minutes || 0;
+                  const todayMinutes = stats.today.minutes;
+                  
+                  // Calculate percentage difference using the same logic as ProgressIndicator
+                  const { percentage, isPositive } = calculatePercentageChange(
+                    todayMinutes,
+                    previousDayMinutes
+                  );
+                  
+                  return (
+                    <>
+                      <div className="flex items-center justify-center gap-1">
+                        {percentage === 0 && isPositive === null ? (
+                          <div className="text-2xl font-bold text-gray-400">
+                            --
+                          </div>
+                        ) : (
+                          <>
+                            {isPositive ? (
+                              <TrendingUp
+                                size={20}
+                                className="text-green-600"
+                              />
+                            ) : (
+                              <TrendingDown
+                                size={20}
+                                className="text-red-600"
+                              />
+                            )}
+                            <div
+                              className={`text-2xl font-bold ${
+                                isPositive ? "text-green-600" : "text-red-600"
+                              }`}
+                            >
+                              {percentage}%
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-700 font-medium mt-1">
+                        vs Yesterday
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Best Day Comparison Card */}
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">{(() => {
                   const bestDayMinutes = bestRecords.bestDay?.minutes || 0;
                   const todayMinutes = stats.today.minutes;
 

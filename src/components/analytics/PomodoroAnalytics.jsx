@@ -718,15 +718,16 @@ export const PomodoroAnalytics = () => {
               {/* Previous Day Comparison Card */}
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
                 {(() => {
-                  const previousDayMinutes = previousStats.previousDay?.minutes || 0;
+                  const previousDayMinutes =
+                    previousStats.previousDay?.minutes || 0;
                   const todayMinutes = stats.today.minutes;
-                  
+
                   // Calculate percentage difference using the same logic as ProgressIndicator
                   const { percentage, isPositive } = calculatePercentageChange(
                     todayMinutes,
                     previousDayMinutes
                   );
-                  
+
                   return (
                     <>
                       <div className="flex items-center justify-center gap-1">
@@ -766,7 +767,8 @@ export const PomodoroAnalytics = () => {
               </div>
 
               {/* Best Day Comparison Card */}
-              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">{(() => {
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
+                {(() => {
                   const bestDayMinutes = bestRecords.bestDay?.minutes || 0;
                   const todayMinutes = stats.today.minutes;
 

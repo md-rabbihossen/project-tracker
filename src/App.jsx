@@ -1826,14 +1826,18 @@ export default function App() {
               const hasActualTasks =
                 (tasks && tasks.length > 0) ||
                 (completedOneTimeTasks && completedOneTimeTasks.length > 0);
-              const isToday = lastResetDate === today;
 
-              // Only proceed if we have data OR it's today's record
-              if (!hasActualTasks && !isToday) {
-                console.log(
-                  "⚠️ Cloud has empty tasks and is not from today - will use localStorage fallback"
+              // CRITICAL FIX: Check localStorage - if cloud is empty but local has data, skip cloud
+              const localTasks = localStorage.getItem("todayTasks");
+              const localParsed = localTasks ? JSON.parse(localTasks) : [];
+              const localHasTasks = localParsed.length > 0;
+
+              // Only proceed if cloud has data OR localStorage is also empty
+              if (!hasActualTasks && localHasTasks) {
+                console.warn(
+                  "⚠️ SKIPPING cloud empty tasks - localStorage has data! Will load from localStorage instead."
                 );
-                // Don't set hasAnyCloudData, let it fallback to localStorage
+                // Skip this entire cloud load by not entering the else block
               } else {
                 // Check if tasks need to be reset (if last reset was not today)
                 if (lastResetDate && lastResetDate !== today) {

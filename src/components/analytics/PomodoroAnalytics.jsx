@@ -714,6 +714,71 @@ export const PomodoroAnalytics = () => {
                   Avg/Day This Week
                 </div>
               </div>
+
+              {/* Best Day Comparison Card */}
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
+                {(() => {
+                  const bestDayMinutes = bestRecords.bestDay?.minutes || 0;
+                  const todayMinutes = stats.today.minutes;
+
+                  // Calculate percentage difference
+                  let percentageDiff = 0;
+                  let isAhead = false;
+
+                  if (bestDayMinutes > 0) {
+                    if (todayMinutes >= bestDayMinutes) {
+                      // Ahead or matching best day
+                      percentageDiff = Math.round(
+                        ((todayMinutes - bestDayMinutes) / bestDayMinutes) * 100
+                      );
+                      isAhead = true;
+                    } else {
+                      // Behind best day
+                      percentageDiff = Math.round(
+                        ((bestDayMinutes - todayMinutes) / bestDayMinutes) * 100
+                      );
+                      isAhead = false;
+                    }
+                  }
+
+                  return (
+                    <>
+                      <div className="flex items-center justify-center gap-1">
+                        {bestDayMinutes > 0 ? (
+                          <>
+                            {isAhead ? (
+                              <TrendingUp
+                                size={20}
+                                className="text-green-600"
+                              />
+                            ) : (
+                              <TrendingDown
+                                size={20}
+                                className="text-red-600"
+                              />
+                            )}
+                            <div
+                              className={`text-2xl font-bold ${
+                                isAhead ? "text-green-600" : "text-red-600"
+                              }`}
+                            >
+                              {percentageDiff}%
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-2xl font-bold text-gray-400">
+                            --
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-700 font-medium mt-1">
+                        vs Best Day
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
                 <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
                   {stats.today.sessions}

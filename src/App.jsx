@@ -1807,6 +1807,8 @@ export default function App() {
             }
 
             // Load tasks from cloud or localStorage
+            // IMPORTANT: Only use cloud data if it has actual tasks OR is for today
+            // This prevents loading empty arrays that were incorrectly synced
             if (cloudData.todayTasks) {
               const { tasks, completedOneTimeTasks, lastResetDate } =
                 cloudData.todayTasks;
@@ -1820,199 +1822,225 @@ export default function App() {
                 needsReset: lastResetDate !== today,
               });
 
-              // Check if tasks need to be reset (if last reset was not today)
-              if (lastResetDate && lastResetDate !== today) {
+              // Check if cloud data has actual tasks or is from today
+              const hasActualTasks =
+                (tasks && tasks.length > 0) ||
+                (completedOneTimeTasks && completedOneTimeTasks.length > 0);
+              const isToday = lastResetDate === today;
+
+              // Only proceed if we have data OR it's today's record
+              if (!hasActualTasks && !isToday) {
                 console.log(
-                  "🔄 Cloud tasks are from previous day, applying reset logic..."
+                  "⚠️ Cloud has empty tasks and is not from today - will use localStorage fallback"
                 );
-
-                // Try to get yesterday's skipped tasks from temporary storage
-                let yesterdaySkippedTaskIds = new Set();
-
-                try {
-                  const savedYesterdaySkips = localStorage.getItem(
-                    "yesterdaySkippedTasks"
+                // Don't set hasAnyCloudData, let it fallback to localStorage
+              } else {
+                // Check if tasks need to be reset (if last reset was not today)
+                if (lastResetDate && lastResetDate !== today) {
+                  console.log(
+                    "🔄 Cloud tasks are from previous day, applying reset logic..."
                   );
-                  if (savedYesterdaySkips) {
-                    const yesterdaySkips = JSON.parse(savedYesterdaySkips);
-                    yesterdaySkippedTaskIds = new Set(
-                      yesterdaySkips
-                        .filter((st) => st.skipDate === lastResetDate)
-                        .map((st) => st.taskId)
+
+                  // Try to get yesterday's skipped tasks from temporary storage
+                  let yesterdaySkippedTaskIds = new Set();
+
+                  try {
+                    const savedYesterdaySkips = localStorage.getItem(
+                      "yesterdaySkippedTasks"
                     );
-                    console.log(
-                      "📥 Cloud sync - Loaded yesterday's skipped tasks:",
-                      yesterdaySkippedTaskIds.size
+                    if (savedYesterdaySkips) {
+                      const yesterdaySkips = JSON.parse(savedYesterdaySkips);
+                      yesterdaySkippedTaskIds = new Set(
+                        yesterdaySkips
+                          .filter((st) => st.skipDate === lastResetDate)
+                          .map((st) => st.taskId)
+                      );
+                      console.log(
+                        "📥 Cloud sync - Loaded yesterday's skipped tasks:",
+                        yesterdaySkippedTaskIds.size
+                      );
+                    }
+                  } catch (err) {
+                    console.warn(
+                      "⚠️ Cloud sync - Failed to load yesterday's skipped tasks:",
+                      err
                     );
                   }
-                } catch (err) {
-                  console.warn(
-                    "⚠️ Cloud sync - Failed to load yesterday's skipped tasks:",
-                    err
+
+                  // Filter tasks that were actually visible yesterday (scheduled for that day + not skipped)
+                  const yesterdayVisibleTasks = tasks.filter((task) => {
+                    // Exclude skipped tasks
+                    if (yesterdaySkippedTaskIds.has(task.id)) return false;
+
+                    // Include one-time tasks
+                    if (!task.isDaily) return true;
+
+                    // For recurring tasks, check if they were scheduled for yesterday
+                    if (task.repeatType === "daily") return true;
+
+                    if (
+                      task.repeatType === "custom" &&
+                      task.selectedDays?.length > 0
+                    ) {
+                      // Get yesterday's day index (0=Sun, 1=Mon, ..., 6=Sat)
+                      const yesterdayDate = new Date(lastResetDate);
+                      const yesterdayDayIndex = yesterdayDate.getDay();
+                      return task.selectedDays.includes(yesterdayDayIndex);
+                    }
+
+                    return false;
+                  });
+
+                  // Save yesterday's record before resetting
+                  const completedRecurringCount = yesterdayVisibleTasks.filter(
+                    (t) => t.completed
+                  ).length;
+                  const totalTasks =
+                    yesterdayVisibleTasks.length +
+                    (completedOneTimeTasks?.length || 0);
+                  const completedTotal =
+                    completedRecurringCount +
+                    (completedOneTimeTasks?.length || 0);
+                  const remainingTasks = Math.max(
+                    0,
+                    totalTasks - completedTotal
                   );
-                }
+                  const progressPercentage =
+                    totalTasks > 0 ? (completedTotal / totalTasks) * 100 : 0;
 
-                // Filter tasks that were actually visible yesterday (scheduled for that day + not skipped)
-                const yesterdayVisibleTasks = tasks.filter((task) => {
-                  // Exclude skipped tasks
-                  if (yesterdaySkippedTaskIds.has(task.id)) return false;
+                  const yesterdayRecord = {
+                    date: lastResetDate,
+                    completed: completedTotal,
+                    remaining: remainingTasks,
+                    total: totalTasks,
+                    progress: progressPercentage,
+                  };
 
-                  // Include one-time tasks
-                  if (!task.isDaily) return true;
-
-                  // For recurring tasks, check if they were scheduled for yesterday
-                  if (task.repeatType === "daily") return true;
-
-                  if (
-                    task.repeatType === "custom" &&
-                    task.selectedDays?.length > 0
-                  ) {
-                    // Get yesterday's day index (0=Sun, 1=Mon, ..., 6=Sat)
-                    const yesterdayDate = new Date(lastResetDate);
-                    const yesterdayDayIndex = yesterdayDate.getDay();
-                    return task.selectedDays.includes(yesterdayDayIndex);
-                  }
-
-                  return false;
-                });
-
-                // Save yesterday's record before resetting
-                const completedRecurringCount = yesterdayVisibleTasks.filter(
-                  (t) => t.completed
-                ).length;
-                const totalTasks =
-                  yesterdayVisibleTasks.length +
-                  (completedOneTimeTasks?.length || 0);
-                const completedTotal =
-                  completedRecurringCount +
-                  (completedOneTimeTasks?.length || 0);
-                const remainingTasks = Math.max(0, totalTasks - completedTotal);
-                const progressPercentage =
-                  totalTasks > 0 ? (completedTotal / totalTasks) * 100 : 0;
-
-                const yesterdayRecord = {
-                  date: lastResetDate,
-                  completed: completedTotal,
-                  remaining: remainingTasks,
-                  total: totalTasks,
-                  progress: progressPercentage,
-                };
-
-                console.log(
-                  "💾 Saving yesterday's record during cloud sync:",
-                  yesterdayRecord
-                );
-                console.log("📊 Cloud sync - Yesterday's record calculation:", {
-                  allTasks: tasks.length,
-                  skippedTasks: yesterdaySkippedTaskIds.size,
-                  visibleTasks: yesterdayVisibleTasks.length,
-                  completedRecurring: completedRecurringCount,
-                  completedOneTime: completedOneTimeTasks?.length || 0,
-                  total: totalTasks,
-                  yesterdayDate: lastResetDate,
-                });
-
-                // Save to Supabase
-                try {
-                  await syncData.saveDailyRecord(
-                    lastResetDate,
-                    yesterdayRecord.completed,
-                    yesterdayRecord.remaining,
-                    yesterdayRecord.total,
-                    yesterdayRecord.progress
+                  console.log(
+                    "💾 Saving yesterday's record during cloud sync:",
+                    yesterdayRecord
                   );
                   console.log(
-                    "✅ Yesterday's record synced to cloud during reset"
+                    "📊 Cloud sync - Yesterday's record calculation:",
+                    {
+                      allTasks: tasks.length,
+                      skippedTasks: yesterdaySkippedTaskIds.size,
+                      visibleTasks: yesterdayVisibleTasks.length,
+                      completedRecurring: completedRecurringCount,
+                      completedOneTime: completedOneTimeTasks?.length || 0,
+                      total: totalTasks,
+                      yesterdayDate: lastResetDate,
+                    }
                   );
-                } catch (err) {
-                  console.error("❌ Failed to sync yesterday's record:", err);
-                }
 
-                // Keep uncompleted tasks
-                const uncompletedTasks = tasks.filter((t) => !t.completed);
-
-                // Reset daily and recurring tasks that were completed
-                const completedRecurringTasks = tasks
-                  .filter(
-                    (t) =>
-                      t.completed &&
-                      (t.isDaily ||
-                        t.repeatType === "daily" ||
-                        shouldShowTaskToday(t))
-                  )
-                  .map((t) => ({ ...t, completed: false }));
-
-                const resetTasks = [
-                  ...uncompletedTasks,
-                  ...completedRecurringTasks,
-                ];
-
-                console.log("📊 Reset applied:", {
-                  uncompleted: uncompletedTasks.length,
-                  resetRecurring: completedRecurringTasks.length,
-                  total: resetTasks.length,
-                });
-
-                // Set reset tasks
-                setTodayTasks(resetTasks);
-                setCompletedOneTimeTasks([]);
-
-                // Save to localStorage
-                localStorage.setItem("todayTasks", JSON.stringify(resetTasks));
-                localStorage.setItem(
-                  "completedOneTimeTasks",
-                  JSON.stringify([])
-                );
-                localStorage.setItem("todayTasksLastReset", today);
-
-                // Sync reset tasks back to cloud immediately
-                console.log("☁️ Syncing reset tasks back to cloud...");
-                syncData.saveTodayTasks(resetTasks, [], today).catch((err) => {
-                  console.error("❌ Failed to sync reset tasks:", err);
-                });
-
-                hasAnyCloudData = true;
-              } else {
-                // Tasks are already reset for today, just load them
-                // But filter completedOneTimeTasks to only include tasks completed today
-                const validCompletedTasks = filterTodayCompletedTasks(
-                  completedOneTimeTasks
-                );
-
-                // Also clean todayTasks of any completed one-time tasks
-                const cleanedTasks = (tasks || []).filter((task) => {
-                  if (task.completed && task.repeatType === "none") {
-                    console.warn(
-                      "🔧 Removing completed one-time task from cloud data:",
-                      task.text
+                  // Save to Supabase
+                  try {
+                    await syncData.saveDailyRecord(
+                      lastResetDate,
+                      yesterdayRecord.completed,
+                      yesterdayRecord.remaining,
+                      yesterdayRecord.total,
+                      yesterdayRecord.progress
                     );
-                    return false;
+                    console.log(
+                      "✅ Yesterday's record synced to cloud during reset"
+                    );
+                  } catch (err) {
+                    console.error("❌ Failed to sync yesterday's record:", err);
                   }
-                  return true;
-                });
 
-                console.log("✅ Filtered cloud data:", {
-                  originalCompletedOneTime: completedOneTimeTasks?.length || 0,
-                  validCompletedOneTime: validCompletedTasks.length,
-                  originalTasks: tasks?.length || 0,
-                  cleanedTasks: cleanedTasks.length,
-                });
+                  // Keep uncompleted tasks
+                  const uncompletedTasks = tasks.filter((t) => !t.completed);
 
-                setTodayTasks(cleanedTasks);
-                setCompletedOneTimeTasks(validCompletedTasks);
-                localStorage.setItem(
-                  "todayTasks",
-                  JSON.stringify(cleanedTasks)
-                );
-                localStorage.setItem(
-                  "completedOneTimeTasks",
-                  JSON.stringify(validCompletedTasks)
-                );
-                if (lastResetDate) {
-                  localStorage.setItem("todayTasksLastReset", lastResetDate);
+                  // Reset daily and recurring tasks that were completed
+                  const completedRecurringTasks = tasks
+                    .filter(
+                      (t) =>
+                        t.completed &&
+                        (t.isDaily ||
+                          t.repeatType === "daily" ||
+                          shouldShowTaskToday(t))
+                    )
+                    .map((t) => ({ ...t, completed: false }));
+
+                  const resetTasks = [
+                    ...uncompletedTasks,
+                    ...completedRecurringTasks,
+                  ];
+
+                  console.log("📊 Reset applied:", {
+                    uncompleted: uncompletedTasks.length,
+                    resetRecurring: completedRecurringTasks.length,
+                    total: resetTasks.length,
+                  });
+
+                  // Set reset tasks
+                  setTodayTasks(resetTasks);
+                  setCompletedOneTimeTasks([]);
+
+                  // Save to localStorage
+                  localStorage.setItem(
+                    "todayTasks",
+                    JSON.stringify(resetTasks)
+                  );
+                  localStorage.setItem(
+                    "completedOneTimeTasks",
+                    JSON.stringify([])
+                  );
+                  localStorage.setItem("todayTasksLastReset", today);
+
+                  // Sync reset tasks back to cloud immediately
+                  console.log("☁️ Syncing reset tasks back to cloud...");
+                  syncData
+                    .saveTodayTasks(resetTasks, [], today)
+                    .catch((err) => {
+                      console.error("❌ Failed to sync reset tasks:", err);
+                    });
+
+                  hasAnyCloudData = true;
+                } else {
+                  // Tasks are already reset for today, just load them
+                  // But filter completedOneTimeTasks to only include tasks completed today
+                  const validCompletedTasks = filterTodayCompletedTasks(
+                    completedOneTimeTasks
+                  );
+
+                  // Also clean todayTasks of any completed one-time tasks
+                  const cleanedTasks = (tasks || []).filter((task) => {
+                    if (task.completed && task.repeatType === "none") {
+                      console.warn(
+                        "🔧 Removing completed one-time task from cloud data:",
+                        task.text
+                      );
+                      return false;
+                    }
+                    return true;
+                  });
+
+                  console.log("✅ Filtered cloud data:", {
+                    originalCompletedOneTime:
+                      completedOneTimeTasks?.length || 0,
+                    validCompletedOneTime: validCompletedTasks.length,
+                    originalTasks: tasks?.length || 0,
+                    cleanedTasks: cleanedTasks.length,
+                  });
+
+                  setTodayTasks(cleanedTasks);
+                  setCompletedOneTimeTasks(validCompletedTasks);
+                  localStorage.setItem(
+                    "todayTasks",
+                    JSON.stringify(cleanedTasks)
+                  );
+                  localStorage.setItem(
+                    "completedOneTimeTasks",
+                    JSON.stringify(validCompletedTasks)
+                  );
+                  if (lastResetDate) {
+                    localStorage.setItem("todayTasksLastReset", lastResetDate);
+                  }
+                  hasAnyCloudData = true;
                 }
-                hasAnyCloudData = true;
-              }
+              } // Close the new if block that checks for actual data
             }
 
             // Load books from cloud or localStorage

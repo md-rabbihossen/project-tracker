@@ -2728,9 +2728,22 @@ export default function App() {
             completedOneTimeTasks
           );
 
-          syncPromises.push(
-            syncData.saveTodayTasks(todayTasks, validCompletedTasks, today)
-          );
+          // CRITICAL FIX: Don't sync if both arrays are empty AND we have data in localStorage
+          // This prevents overwriting good cloud data with empty arrays during edge cases
+          const localTasks = localStorage.getItem("todayTasks");
+          const hasLocalData = localTasks && JSON.parse(localTasks).length > 0;
+          const bothEmpty =
+            todayTasks.length === 0 && validCompletedTasks.length === 0;
+
+          if (bothEmpty && hasLocalData) {
+            console.warn(
+              "⚠️ Prevented syncing empty arrays when localStorage has data - possible race condition"
+            );
+          } else {
+            syncPromises.push(
+              syncData.saveTodayTasks(todayTasks, validCompletedTasks, today)
+            );
+          }
         } else {
           console.log("  ⏭️ Skipping tasks (null)");
         }
@@ -3137,9 +3150,7 @@ export default function App() {
         );
       } else {
         console.log(
-          "  ⏭️ Skipping tasks (count:",
-          todayTasks?.length || 0,
-          ")"
+          "  ⏭️ Skipping tasks (empty or null - manual sync won't overwrite with empty data)"
         );
       }
 

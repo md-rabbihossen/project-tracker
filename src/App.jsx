@@ -3597,56 +3597,157 @@ export default function App() {
     // 🐛 DEBUG: Log created task object
     console.log("✨ Task created - Final task object:", newTask);
 
-    setTodayTasks((prev) => [...prev, newTask]);
+    setTodayTasks((prev) => {
+      const updatedTasks = [...prev, newTask];
+
+      // Immediately save to localStorage
+      localStorage.setItem("todayTasks", JSON.stringify(updatedTasks));
+
+      // Immediately sync to Supabase
+      if (userId) {
+        const today = getDateString();
+        const validCompletedTasks = filterTodayCompletedTasks(
+          completedOneTimeTasks
+        );
+        console.log("☁️ Immediately syncing new task to Supabase...");
+        syncData
+          .saveTodayTasks(updatedTasks, validCompletedTasks, today)
+          .then(() => {
+            console.log("✅ New task synced to cloud successfully!");
+          })
+          .catch((err) => {
+            console.error("❌ Failed to sync new task:", err);
+          });
+      }
+
+      return updatedTasks;
+    });
   };
   const handleToggleTodayTask = (taskId) =>
     setTodayTasks((prev) => {
       const task = prev.find((t) => t.id === taskId);
       if (!task) return prev;
 
+      let updatedTasks;
+      let updatedCompletedOneTimeTasks = completedOneTimeTasks;
+
       // If task is being completed and it's a one-time task (no repeat, regardless of priority)
       if (!task.completed && task.repeatType === "none") {
         // Store it as completed one-time task for progress tracking
-        setCompletedOneTimeTasks((prevCompleted) => {
-          // Check if this task is already in the completed list (prevent duplicates)
-          const alreadyExists = prevCompleted.some((t) => t.id === taskId);
-          if (alreadyExists) {
-            console.warn(
-              "⚠️ Task already in completedOneTimeTasks, skipping duplicate:",
-              taskId
-            );
-            return prevCompleted;
-          }
-          return [
-            ...prevCompleted,
+        const alreadyExists = completedOneTimeTasks.some(
+          (t) => t.id === taskId
+        );
+        if (!alreadyExists) {
+          updatedCompletedOneTimeTasks = [
+            ...completedOneTimeTasks,
             { ...task, completed: true, completedAt: new Date().toISOString() },
           ];
-        });
+          setCompletedOneTimeTasks(updatedCompletedOneTimeTasks);
+          localStorage.setItem(
+            "completedOneTimeTasks",
+            JSON.stringify(updatedCompletedOneTimeTasks)
+          );
+        } else {
+          console.warn(
+            "⚠️ Task already in completedOneTimeTasks, skipping duplicate:",
+            taskId
+          );
+        }
         // Remove it permanently from the main list
-        return prev.filter((t) => t.id !== taskId);
+        updatedTasks = prev.filter((t) => t.id !== taskId);
+      } else {
+        // For repeating tasks, just toggle completion status and update completedAt
+        updatedTasks = prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                completed: !t.completed,
+                completedAt: !t.completed
+                  ? new Date().toISOString()
+                  : t.completedAt,
+              }
+            : t
+        );
       }
 
-      // For repeating tasks, just toggle completion status and update completedAt
-      return prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              completed: !t.completed,
-              completedAt: !t.completed
-                ? new Date().toISOString()
-                : t.completedAt,
-            }
-          : t
-      );
+      // Immediately save to localStorage
+      localStorage.setItem("todayTasks", JSON.stringify(updatedTasks));
+
+      // Immediately sync to Supabase
+      if (userId) {
+        const today = getDateString();
+        const validCompletedTasks = filterTodayCompletedTasks(
+          updatedCompletedOneTimeTasks
+        );
+        console.log("☁️ Immediately syncing toggled task to Supabase...");
+        syncData
+          .saveTodayTasks(updatedTasks, validCompletedTasks, today)
+          .then(() => {
+            console.log("✅ Toggled task synced to cloud successfully!");
+          })
+          .catch((err) => {
+            console.error("❌ Failed to sync toggled task:", err);
+          });
+      }
+
+      return updatedTasks;
     });
   const handleDeleteTodayTask = (taskId) =>
-    setTodayTasks((prev) => prev.filter((task) => task.id !== taskId));
+    setTodayTasks((prev) => {
+      const updatedTasks = prev.filter((task) => task.id !== taskId);
+
+      // Immediately save to localStorage
+      localStorage.setItem("todayTasks", JSON.stringify(updatedTasks));
+
+      // Immediately sync to Supabase
+      if (userId) {
+        const today = getDateString();
+        const validCompletedTasks = filterTodayCompletedTasks(
+          completedOneTimeTasks
+        );
+        console.log(
+          "☁️ Immediately syncing after task deletion to Supabase..."
+        );
+        syncData
+          .saveTodayTasks(updatedTasks, validCompletedTasks, today)
+          .then(() => {
+            console.log("✅ Task deletion synced to cloud successfully!");
+          })
+          .catch((err) => {
+            console.error("❌ Failed to sync task deletion:", err);
+          });
+      }
+
+      return updatedTasks;
+    });
   const handleEditTodayTask = (taskId, newText) =>
-    setTodayTasks((prev) =>
-      prev.map((task) =>
+    setTodayTasks((prev) => {
+      const updatedTasks = prev.map((task) =>
         task.id === taskId ? { ...task, text: newText } : task
-      )
-    );
+      );
+
+      // Immediately save to localStorage
+      localStorage.setItem("todayTasks", JSON.stringify(updatedTasks));
+
+      // Immediately sync to Supabase
+      if (userId) {
+        const today = getDateString();
+        const validCompletedTasks = filterTodayCompletedTasks(
+          completedOneTimeTasks
+        );
+        console.log("☁️ Immediately syncing edited task to Supabase...");
+        syncData
+          .saveTodayTasks(updatedTasks, validCompletedTasks, today)
+          .then(() => {
+            console.log("✅ Edited task synced to cloud successfully!");
+          })
+          .catch((err) => {
+            console.error("❌ Failed to sync edited task:", err);
+          });
+      }
+
+      return updatedTasks;
+    });
 
   const handleSkipTask = (taskId) => {
     const today = getDateString();

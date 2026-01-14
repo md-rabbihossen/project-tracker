@@ -2475,7 +2475,7 @@ export default function App() {
         "📅 Today's record will appear live, historical records will build day by day"
       );
     }
-  }, [loading, dailyRecords, userId]);
+  }, [loading, userId]); // Removed dailyRecords to prevent infinite loop
 
   // V3 Cleanup: Fix records created before weekly task filtering was added
   // This removes records that incorrectly included weekly tasks on non-scheduled days
@@ -2525,7 +2525,7 @@ export default function App() {
         "✅ V3 Cleanup complete! New records will use day indices (0-6) instead of day names for filtering"
       );
     }
-  }, [loading, dailyRecords, userId]);
+  }, [loading, userId]); // Removed dailyRecords to prevent infinite loop
 
   // Clean up old skipped tasks (remove skips from previous days)
   // BUT FIRST: Save yesterday's skipped task info before cleanup for the reset logic

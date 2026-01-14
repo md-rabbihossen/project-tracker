@@ -3603,8 +3603,8 @@ export default function App() {
       // Immediately save to localStorage
       localStorage.setItem("todayTasks", JSON.stringify(updatedTasks));
 
-      // Immediately sync to Supabase
-      if (userId) {
+      // Immediately sync to Supabase (ONLY if not just loaded from cloud)
+      if (userId && !justLoadedFromCloudRef.current) {
         const today = getDateString();
         const validCompletedTasks = filterTodayCompletedTasks(
           completedOneTimeTasks
@@ -3618,6 +3618,8 @@ export default function App() {
           .catch((err) => {
             console.error("❌ Failed to sync new task:", err);
           });
+      } else if (justLoadedFromCloudRef.current) {
+        console.log("⏸️ Skipping immediate sync - just loaded from cloud");
       }
 
       return updatedTasks;
@@ -3673,8 +3675,8 @@ export default function App() {
       // Immediately save to localStorage
       localStorage.setItem("todayTasks", JSON.stringify(updatedTasks));
 
-      // Immediately sync to Supabase
-      if (userId) {
+      // Immediately sync to Supabase (ONLY if not just loaded from cloud)
+      if (userId && !justLoadedFromCloudRef.current) {
         const today = getDateString();
         const validCompletedTasks = filterTodayCompletedTasks(
           updatedCompletedOneTimeTasks
@@ -3688,6 +3690,8 @@ export default function App() {
           .catch((err) => {
             console.error("❌ Failed to sync toggled task:", err);
           });
+      } else if (justLoadedFromCloudRef.current) {
+        console.log("⏸️ Skipping immediate sync - just loaded from cloud");
       }
 
       return updatedTasks;
@@ -3699,8 +3703,8 @@ export default function App() {
       // Immediately save to localStorage
       localStorage.setItem("todayTasks", JSON.stringify(updatedTasks));
 
-      // Immediately sync to Supabase
-      if (userId) {
+      // Immediately sync to Supabase (ONLY if not just loaded from cloud)
+      if (userId && !justLoadedFromCloudRef.current) {
         const today = getDateString();
         const validCompletedTasks = filterTodayCompletedTasks(
           completedOneTimeTasks
@@ -3716,6 +3720,8 @@ export default function App() {
           .catch((err) => {
             console.error("❌ Failed to sync task deletion:", err);
           });
+      } else if (justLoadedFromCloudRef.current) {
+        console.log("⏸️ Skipping immediate sync - just loaded from cloud");
       }
 
       return updatedTasks;
@@ -3729,8 +3735,8 @@ export default function App() {
       // Immediately save to localStorage
       localStorage.setItem("todayTasks", JSON.stringify(updatedTasks));
 
-      // Immediately sync to Supabase
-      if (userId) {
+      // Immediately sync to Supabase (ONLY if not just loaded from cloud)
+      if (userId && !justLoadedFromCloudRef.current) {
         const today = getDateString();
         const validCompletedTasks = filterTodayCompletedTasks(
           completedOneTimeTasks
@@ -3744,6 +3750,8 @@ export default function App() {
           .catch((err) => {
             console.error("❌ Failed to sync edited task:", err);
           });
+      } else if (justLoadedFromCloudRef.current) {
+        console.log("⏸️ Skipping immediate sync - just loaded from cloud");
       }
 
       return updatedTasks;

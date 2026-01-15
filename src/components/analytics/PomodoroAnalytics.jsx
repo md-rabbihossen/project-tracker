@@ -741,6 +741,98 @@ export const PomodoroAnalytics = () => {
                   Grade
                 </div>
               </div>
+              {/* Today vs Previous Day Card */}
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[120px] border border-white/50">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <div
+                    className={`text-2xl font-bold ${
+                      calculatePercentageChange(
+                        stats.today.minutes,
+                        previousStats.previousDay.minutes
+                      ).isPositive
+                        ? "text-green-600"
+                        : calculatePercentageChange(
+                            stats.today.minutes,
+                            previousStats.previousDay.minutes
+                          ).isPositive === false
+                        ? "text-red-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {calculatePercentageChange(
+                      stats.today.minutes,
+                      previousStats.previousDay.minutes
+                    ).isPositive !== null && (
+                      <>
+                        {calculatePercentageChange(
+                          stats.today.minutes,
+                          previousStats.previousDay.minutes
+                        ).isPositive ? (
+                          <TrendingUp size={20} className="inline mr-1" />
+                        ) : (
+                          <TrendingDown size={20} className="inline mr-1" />
+                        )}
+                      </>
+                    )}
+                    {
+                      calculatePercentageChange(
+                        stats.today.minutes,
+                        previousStats.previousDay.minutes
+                      ).percentage
+                    }
+                    %
+                  </div>
+                </div>
+                <div className="text-xs text-gray-700 font-medium text-center">
+                  vs Previous Day
+                </div>
+              </div>
+              {/* Today vs Best Day Card */}
+              <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[120px] border border-white/50">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <div
+                    className={`text-2xl font-bold ${
+                      calculatePercentageChange(
+                        stats.today.minutes,
+                        bestRecords.bestDay.minutes
+                      ).isPositive
+                        ? "text-green-600"
+                        : calculatePercentageChange(
+                            stats.today.minutes,
+                            bestRecords.bestDay.minutes
+                          ).isPositive === false
+                        ? "text-red-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {calculatePercentageChange(
+                      stats.today.minutes,
+                      bestRecords.bestDay.minutes
+                    ).isPositive !== null && (
+                      <>
+                        {calculatePercentageChange(
+                          stats.today.minutes,
+                          bestRecords.bestDay.minutes
+                        ).isPositive ? (
+                          <TrendingUp size={20} className="inline mr-1" />
+                        ) : (
+                          <TrendingDown size={20} className="inline mr-1" />
+                        )}
+                      </>
+                    )}
+                    {
+                      calculatePercentageChange(
+                        stats.today.minutes,
+                        bestRecords.bestDay.minutes
+                      ).percentage
+                    }
+                    %
+                  </div>
+                </div>
+                <div className="text-xs text-gray-700 font-medium text-center">
+                  vs Best Day
+                </div>
+              </div>
             </div>
           </div>
         </div>

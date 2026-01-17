@@ -51,7 +51,7 @@ const calculatePercentageChange = (current, previous) => {
 const ProgressIndicator = ({ current, previous, className = "" }) => {
   const { percentage, isPositive } = calculatePercentageChange(
     current,
-    previous
+    previous,
   );
 
   if (percentage === 0 && isPositive === null) return null;
@@ -206,7 +206,7 @@ export const PomodoroAnalytics = () => {
 
   const updateUserGoal = (updatedGoal) => {
     const updatedGoals = userGoals.map((goal) =>
-      goal.id === updatedGoal.id ? updatedGoal : goal
+      goal.id === updatedGoal.id ? updatedGoal : goal,
     );
     saveUserGoals(updatedGoals);
   };
@@ -317,7 +317,7 @@ export const PomodoroAnalytics = () => {
     const updatedGoals = updatePomodoroGoals(
       tempGoals.dailyMinutes,
       tempGoals.weeklyMinutes,
-      tempGoals.monthlyMinutes
+      tempGoals.monthlyMinutes,
     );
     setGoals(updatedGoals.goals);
     setEditingGoals(false);
@@ -468,8 +468,8 @@ export const PomodoroAnalytics = () => {
                       type === "daily"
                         ? "24"
                         : type === "weekly"
-                        ? "168"
-                        : "720"
+                          ? "168"
+                          : "720"
                     }
                     value={Math.floor(editValue / 60)}
                     onChange={(e) => {
@@ -734,7 +734,9 @@ export const PomodoroAnalytics = () => {
               <div className="bg-white/60 backdrop-blur-sm rounded-2xl p-4 shadow-lg min-w-[85px] border border-white/50">
                 <div className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
                   {calculateGrade(
-                    Math.round((stats.today.minutes / goals.dailyMinutes) * 100)
+                    Math.round(
+                      (stats.today.minutes / goals.dailyMinutes) * 100,
+                    ),
                   )}
                 </div>
                 <div className="text-xs text-gray-700 font-medium mt-1">
@@ -748,25 +750,25 @@ export const PomodoroAnalytics = () => {
                     className={`text-2xl font-bold ${
                       calculatePercentageChange(
                         stats.today.minutes,
-                        previousStats.previousDay.minutes
+                        previousStats.previousDay.minutes,
                       ).isPositive
                         ? "text-green-600"
                         : calculatePercentageChange(
-                            stats.today.minutes,
-                            previousStats.previousDay.minutes
-                          ).isPositive === false
-                        ? "text-red-600"
-                        : "text-gray-600"
+                              stats.today.minutes,
+                              previousStats.previousDay.minutes,
+                            ).isPositive === false
+                          ? "text-red-600"
+                          : "text-gray-600"
                     }`}
                   >
                     {calculatePercentageChange(
                       stats.today.minutes,
-                      previousStats.previousDay.minutes
+                      previousStats.previousDay.minutes,
                     ).isPositive !== null && (
                       <>
                         {calculatePercentageChange(
                           stats.today.minutes,
-                          previousStats.previousDay.minutes
+                          previousStats.previousDay.minutes,
                         ).isPositive ? (
                           <TrendingUp size={20} className="inline mr-1" />
                         ) : (
@@ -777,7 +779,7 @@ export const PomodoroAnalytics = () => {
                     {
                       calculatePercentageChange(
                         stats.today.minutes,
-                        previousStats.previousDay.minutes
+                        previousStats.previousDay.minutes,
                       ).percentage
                     }
                     %
@@ -794,25 +796,25 @@ export const PomodoroAnalytics = () => {
                     className={`text-2xl font-bold ${
                       calculatePercentageChange(
                         stats.today.minutes,
-                        bestRecords.bestDay.minutes
+                        bestRecords.bestDay.minutes,
                       ).isPositive
                         ? "text-green-600"
                         : calculatePercentageChange(
-                            stats.today.minutes,
-                            bestRecords.bestDay.minutes
-                          ).isPositive === false
-                        ? "text-red-600"
-                        : "text-gray-600"
+                              stats.today.minutes,
+                              bestRecords.bestDay.minutes,
+                            ).isPositive === false
+                          ? "text-red-600"
+                          : "text-gray-600"
                     }`}
                   >
                     {calculatePercentageChange(
                       stats.today.minutes,
-                      bestRecords.bestDay.minutes
+                      bestRecords.bestDay.minutes,
                     ).isPositive !== null && (
                       <>
                         {calculatePercentageChange(
                           stats.today.minutes,
-                          bestRecords.bestDay.minutes
+                          bestRecords.bestDay.minutes,
                         ).isPositive ? (
                           <TrendingUp size={20} className="inline mr-1" />
                         ) : (
@@ -823,7 +825,7 @@ export const PomodoroAnalytics = () => {
                     {
                       calculatePercentageChange(
                         stats.today.minutes,
-                        bestRecords.bestDay.minutes
+                        bestRecords.bestDay.minutes,
                       ).percentage
                     }
                     %
@@ -1062,7 +1064,7 @@ export const PomodoroAnalytics = () => {
                               >
                                 {label}: {formatDuration(minutes)}
                               </span>
-                            )
+                            ),
                           )}
                         </div>
                       </div>
@@ -1097,7 +1099,7 @@ export const PomodoroAnalytics = () => {
                         {Object.entries(previousStats.previousDay.labels)
                           .map(
                             ([label, minutes]) =>
-                              `${label}: ${formatDuration(minutes)}`
+                              `${label}: ${formatDuration(minutes)}`,
                           )
                           .join(", ")}
                       </div>
@@ -1107,45 +1109,6 @@ export const PomodoroAnalytics = () => {
               </div>
 
               {/* Enhanced Analytics Sections for Today Tab */}
-
-              {/* Productivity Insights Section */}
-              <motion.div
-                id="insights-section"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100"
-              >
-                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <TrendingUp size={24} className="text-indigo-600" />
-                  Smart Productivity Insights
-                </h3>
-                <ProductivityInsights
-                  stats={{
-                    today: stats.today,
-                    week: stats.week,
-                    month: stats.month,
-                    previousDay: previousStats.previousDay,
-                    previousWeek: previousStats.previousWeek,
-                    previousMonth: previousStats.previousMonth,
-                  }}
-                  goals={goals}
-                  bestRecords={bestRecords}
-                />
-              </motion.div>
-
-              {/* Advanced Analytics Section */}
-              <motion.div
-                id="analytics-section"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100"
-              >
-                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Target size={24} className="text-green-600" />
-                  Advanced Analytics Dashboard
-                </h3>
-                <AdvancedAnalytics stats={stats} goals={goals} />
-              </motion.div>
 
               {/* Time Comparison Section */}
               <motion.div
@@ -1271,9 +1234,19 @@ export const PomodoroAnalytics = () => {
                   <div className="text-lg font-bold text-green-600">
                     {formatDuration(previousStats.previousWeek.minutes)}
                   </div>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 mb-2">
                     {previousStats.previousWeek.sessions} sessions
                   </p>
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border border-green-100">
+                    <p className="text-xs text-gray-700 mb-1">
+                      <strong>Average time per day:</strong>
+                    </p>
+                    <p className="text-sm font-bold text-green-600">
+                      {formatDuration(
+                        Math.round(previousStats.previousWeek.minutes / 7),
+                      )}
+                    </p>
+                  </div>
                   {Object.keys(previousStats.previousWeek.labels || {}).length >
                     0 && (
                     <div className="mt-2 text-xs text-gray-500">
@@ -1281,7 +1254,7 @@ export const PomodoroAnalytics = () => {
                       {Object.entries(previousStats.previousWeek.labels)
                         .map(
                           ([label, minutes]) =>
-                            `${label}: ${formatDuration(minutes)}`
+                            `${label}: ${formatDuration(minutes)}`,
                         )
                         .join(", ")}
                     </div>
@@ -1387,7 +1360,7 @@ export const PomodoroAnalytics = () => {
                       {Object.entries(previousStats.previousMonth.labels)
                         .map(
                           ([label, minutes]) =>
-                            `${label}: ${formatDuration(minutes)}`
+                            `${label}: ${formatDuration(minutes)}`,
                         )
                         .join(", ")}
                     </div>
@@ -1451,7 +1424,7 @@ export const PomodoroAnalytics = () => {
                       {stats.lifetime.totalSessions > 0
                         ? Math.round(
                             stats.lifetime.totalMinutes /
-                              stats.lifetime.totalSessions
+                              stats.lifetime.totalSessions,
                           )
                         : 0}
                       min
